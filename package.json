@@ -1,0 +1,19 @@
+{
+  "name": "fat",
+  "version": "1.0.0",
+  "description": "A Java Swing desktop application for tracking personal expenses. Built for COMP 2800 as a group project.",
+  "main": "generate_ur.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "docx": "^9.6.1"
+  }
+}
