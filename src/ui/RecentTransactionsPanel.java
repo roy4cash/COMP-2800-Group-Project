@@ -1,3 +1,10 @@
+/**
+ * File: RecentTransactionsPanel.java
+ * Purpose: Shows a compact dashboard summary of the latest saved expenses.
+ *
+ * This panel exists to make the dashboard feel more like a complete product by
+ * pairing high-level summaries with a small recent-activity feed.
+ */
 package ui;
 
 import model.Expense;
@@ -26,6 +33,7 @@ public class RecentTransactionsPanel extends JPanel implements Observer {
     private final ExpenseManager manager;
     private final JPanel bodyPanel = new JPanel();
 
+    /** Creates the recent-transactions dashboard card and subscribes it to updates. */
     public RecentTransactionsPanel(ExpenseManager manager) {
         this.manager = manager;
         manager.addObserver(this);
@@ -36,6 +44,7 @@ public class RecentTransactionsPanel extends JPanel implements Observer {
         update();
     }
 
+    /** Builds the outer card shell that holds the recent-transaction rows. */
     private JPanel buildCard() {
         JLabel titleLabel = new JLabel("  Recent Transactions");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
@@ -57,6 +66,7 @@ public class RecentTransactionsPanel extends JPanel implements Observer {
     }
 
     @Override
+    /** Reloads the recent transaction list or an appropriate empty/error message. */
     public void update() {
         bodyPanel.removeAll();
 
@@ -80,6 +90,7 @@ public class RecentTransactionsPanel extends JPanel implements Observer {
         repaint();
     }
 
+    /** Builds one compact row showing description, date/category, and amount. */
     private JPanel createExpenseRow(Expense expense, boolean alternate) {
         JPanel row = new JPanel(new BorderLayout(12, 0));
         row.setOpaque(true);
@@ -114,6 +125,7 @@ public class RecentTransactionsPanel extends JPanel implements Observer {
         return row;
     }
 
+    /** Builds a centered placeholder row for empty or unavailable states. */
     private JPanel createMessageRow(String title, String body) {
         JPanel wrapper = new JPanel(new GridBagLayout());
         wrapper.setBackground(CARD_BG);

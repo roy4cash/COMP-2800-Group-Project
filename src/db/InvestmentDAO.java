@@ -1,3 +1,10 @@
+/**
+ * File: InvestmentDAO.java
+ * Purpose: Handles JDBC access for the manual investment-tracking module.
+ *
+ * Investments are intentionally stored through their own DAO because that
+ * feature follows a simpler direct panel-to-database flow.
+ */
 package db;
 
 import model.Investment;
@@ -19,6 +26,8 @@ public class InvestmentDAO {
     private String lastLoadErrorMessage;
 
     // DDL — executed once when InvestmentPanel is constructed
+    // This DDL is kept in the DAO so the Investments feature can prepare its
+    // own table on first use without requiring a second manual schema step.
     private static final String CREATE_TABLE_SQL =
         "CREATE TABLE IF NOT EXISTS investments (" +
         "  id            INT AUTO_INCREMENT PRIMARY KEY," +
@@ -147,6 +156,12 @@ public class InvestmentDAO {
      *
      * @param id     the investment's database ID
      * @param price  the new current market price
+     */
+    /**
+     * Updates only the current price field for one holding.
+     *
+     * This helper exists so price updates can remain narrow and readable
+     * instead of requiring a full-row update statement.
      */
     public void updateCurrentPrice(int id, double price) {
         String sql = "UPDATE investments SET current_price = ? WHERE id = ?";

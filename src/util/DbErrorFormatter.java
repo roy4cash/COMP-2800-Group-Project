@@ -1,3 +1,10 @@
+/**
+ * File: DbErrorFormatter.java
+ * Purpose: Converts raw database errors into shorter, user-facing messages.
+ *
+ * The project uses this helper so JDBC failures can be shown safely in the UI
+ * without exposing unnecessarily technical text to end users.
+ */
 package util;
 
 /**
@@ -5,8 +12,15 @@ package util;
  */
 public final class DbErrorFormatter {
 
+    /** Prevents instantiation because this is a static utility class. */
     private DbErrorFormatter() {}
 
+    /**
+     * Converts raw JDBC/MySQL error text into a shorter message suitable for UI labels.
+     *
+     * The mapping is intentionally keyword-based because the application only
+     * needs to recognize a small set of common deployment and schema failures.
+     */
     public static String format(String rawMessage) {
         if (rawMessage == null || rawMessage.trim().isEmpty()) {
             return "Database operation failed. Check the MySQL setup and try again.";

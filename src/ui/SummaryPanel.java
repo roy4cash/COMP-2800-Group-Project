@@ -1,3 +1,10 @@
+/**
+ * File: SummaryPanel.java
+ * Purpose: Displays budget, spending, and remaining-balance summary cards.
+ *
+ * It is responsible for turning raw monthly numbers into visual budget progress
+ * indicators that can be understood at a glance.
+ */
 package ui;
 
 import model.Budget;
@@ -34,6 +41,7 @@ public class SummaryPanel extends JPanel implements Observer {
     private final JLabel progressLabel  = new JLabel();
     private final JProgressBar progressBar = new JProgressBar(0, 100);
 
+    /** Creates the three dashboard summary cards and subscribes the panel to updates. */
     public SummaryPanel(ExpenseManager manager) {
         this.manager = manager;
         manager.addObserver(this);
@@ -95,6 +103,12 @@ public class SummaryPanel extends JPanel implements Observer {
     }
 
     @Override
+    /**
+     * Recalculates monthly budget, spent, and remaining values.
+     *
+     * This method also updates the progress bar so the user can understand
+     * budget status at a glance without reading every number in detail.
+     */
     public void update() {
         Budget budget    = manager.getCurrentBudget();
         double spent     = manager.getTotalSpentThisMonth();

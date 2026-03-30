@@ -1,3 +1,10 @@
+/**
+ * File: AlertPanel.java
+ * Purpose: Displays a banner summarizing the user's current budget state.
+ *
+ * The panel reacts to observer notifications so budget warnings stay in sync
+ * with expense and budget changes elsewhere in the app.
+ */
 package ui;
 
 import model.Budget;
@@ -33,6 +40,12 @@ public class AlertPanel extends JPanel implements Observer {
     private final JLabel         message;
     private final JLabel         subMessage;
 
+    /**
+     * Creates the budget alert banner and subscribes it to observer updates.
+     *
+     * The banner is kept as its own panel so budget-status messaging can be
+     * reused cleanly inside the dashboard layout.
+     */
     public AlertPanel(ExpenseManager manager) {
         this.manager    = manager;
         this.icon       = new JLabel();
@@ -70,6 +83,12 @@ public class AlertPanel extends JPanel implements Observer {
     }
 
     @Override
+    /**
+     * Recalculates the banner state from the current budget and spending totals.
+     *
+     * The panel deliberately handles "no budget", "warning", and "over budget"
+     * as separate cases so the message can stay clear for demo purposes.
+     */
     public void update() {
         Budget budget = manager.getCurrentBudget();
         double spent  = manager.getTotalSpentThisMonth();
@@ -114,6 +133,12 @@ public class AlertPanel extends JPanel implements Observer {
         }
     }
 
+    /**
+     * Applies the final colours and text for the selected alert state.
+     *
+     * Centralizing this styling avoids repeating the same UI update code in
+     * every branch of update().
+     */
     private void style(JPanel banner, Color bg, Color fg,
                        String ico, String msg, String sub) {
         banner.setBackground(bg);

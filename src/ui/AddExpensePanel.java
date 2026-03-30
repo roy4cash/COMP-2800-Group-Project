@@ -1,3 +1,10 @@
+/**
+ * File: AddExpensePanel.java
+ * Purpose: Provides the main expense-entry and budget-entry screen.
+ *
+ * This panel is the primary place where users create expenses and set the
+ * current month's budget, so it contains both validation and user feedback.
+ */
 package ui;
 
 import model.Budget;
@@ -61,6 +68,12 @@ public class AddExpensePanel extends JPanel {
     private JButton               addExpenseButton;
     private JButton               setBudgetButton;
 
+    /**
+     * Creates the add-expense page and loads the initial category/budget state.
+     *
+     * The constructor performs the first data load so the page is ready for
+     * use as soon as the main frame becomes visible.
+     */
     public AddExpensePanel(ExpenseManager manager) {
         this.manager = manager;
         setBackground(BG);
@@ -75,6 +88,7 @@ public class AddExpensePanel extends JPanel {
     // UI construction
     // ----------------------------------------------------------------
 
+    /** Builds the two-card layout used for expense entry and budget entry. */
     private void buildUI() {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets  = new Insets(20, 20, 20, 20);
@@ -327,6 +341,7 @@ public class AddExpensePanel extends JPanel {
         return gbc;
     }
 
+    /** Clears stale status messages whenever the user edits the related fields. */
     private void wireStatusResetters() {
         attachStatusClearer(descriptionField, expenseStatusLabel);
         attachStatusClearer(amountField, expenseStatusLabel);
@@ -343,7 +358,7 @@ public class AddExpensePanel extends JPanel {
         });
     }
 
-    /** Populates the category dropdown from the manager (which falls back to defaults). */
+    /** Populates the category dropdown from the manager, including fallback behavior. */
     private void loadCategories() {
         List<Category> categories = manager.getAllCategories();
         String loadError = manager.getLastCategoryLoadError();
@@ -372,6 +387,7 @@ public class AddExpensePanel extends JPanel {
         }
     }
 
+    /** Loads the current month's budget so the right-hand card reflects saved data. */
     private void loadCurrentBudget() {
         Budget budget = manager.getCurrentBudget();
         String loadError = manager.getLastBudgetLoadError();
@@ -397,6 +413,7 @@ public class AddExpensePanel extends JPanel {
     // Event handlers
     // ----------------------------------------------------------------
 
+    /** Validates the expense form, saves through ExpenseManager, and shows feedback. */
     private void handleAddExpense() {
         // Read raw text from fields; placeholder fields return "" when empty
         String description = descriptionField.getText().trim();
@@ -436,6 +453,7 @@ public class AddExpensePanel extends JPanel {
         }
     }
 
+    /** Validates the budget field, saves through ExpenseManager, and shows feedback. */
     private void handleSetBudget() {
         String budgetText = budgetField.getText().trim();
         String error = ValidationUtils.validateBudgetInput(budgetText);

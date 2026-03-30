@@ -1,3 +1,10 @@
+/**
+ * File: ValidationUtils.java
+ * Purpose: Centralizes reusable validation rules for expense, budget, and investment forms.
+ *
+ * Keeping validation in one utility makes the UI easier to maintain and keeps
+ * JDBC operations from receiving invalid user input.
+ */
 package util;
 
 import java.time.LocalDate;
@@ -13,6 +20,7 @@ public class ValidationUtils {
     private static final int INVESTMENT_NAME_MAX     = 100;
     private static final int TICKER_MAX              = 20;
 
+    /** Prevents instantiation because validation is exposed entirely through static helpers. */
     private ValidationUtils() {}
 
     /**
@@ -144,6 +152,12 @@ public class ValidationUtils {
         return text == null || text.trim().isEmpty();
     }
 
+    /**
+     * Shared helper for regex-based validation rules.
+     *
+     * Centralizing the trim-and-match logic keeps the public validation methods
+     * easier to read and reduces repeated null handling.
+     */
     private static boolean matchesPattern(String text, String regex) {
         return text != null && text.trim().matches(regex);
     }

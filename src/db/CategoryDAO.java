@@ -1,3 +1,10 @@
+/**
+ * File: CategoryDAO.java
+ * Purpose: Loads and seeds expense categories used by the expense-entry UI.
+ *
+ * This class also contains a fallback strategy so the category list can still
+ * be explained to the user even when the database is empty or unavailable.
+ */
 package db;
 
 import model.Category;
@@ -50,7 +57,7 @@ public class CategoryDAO {
         return categories;
     }
 
-    /** Returns hardcoded categories without any DB call. */
+    /** Returns fallback categories without making any JDBC call. */
     private List<Category> getHardcodedCategories() {
         List<Category> list = new ArrayList<>();
         for (Object[] row : DEFAULT_CATEGORIES) {
@@ -63,7 +70,7 @@ public class CategoryDAO {
     // Private helpers
     // ----------------------------------------------------------------
 
-    /** Executes the SELECT and returns whatever is in the table. */
+    /** Executes the category SELECT query and maps the result set into Category objects. */
     private List<Category> fetchCategories() {
         List<Category> categories = new ArrayList<>();
         lastLoadErrorMessage = null;
@@ -86,9 +93,10 @@ public class CategoryDAO {
     }
 
     /**
-     * Inserts the hardcoded default categories into the DB.
-     * Uses INSERT IGNORE so calling this multiple times
-     * is safe and will not create duplicate rows.
+     * Seeds the categories table when it is empty.
+     *
+     * INSERT IGNORE keeps repeated startup attempts safe even if some rows
+     * already exist.
      */
     private void insertDefaultCategories() {
         String sql = "INSERT IGNORE INTO categories (id, name) VALUES (?, ?)";

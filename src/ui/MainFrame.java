@@ -1,3 +1,10 @@
+/**
+ * File: MainFrame.java
+ * Purpose: Main application window containing the shared tabbed interface.
+ *
+ * The frame creates the shared ExpenseManager once and passes it to every
+ * observer-driven page so the whole desktop app works from the same data source.
+ */
 package ui;
 
 import observer.ExpenseManager;
@@ -29,6 +36,12 @@ public class MainFrame extends JFrame {
     private static final Color PRIMARY = new Color(37, 99, 235);
     private static final Color BG      = new Color(248, 250, 252);
 
+    /**
+     * Creates the main desktop window and wires together the shared panels.
+     *
+     * One ExpenseManager instance is created here so every expense- and
+     * budget-related page works from the same subject and DAO set.
+     */
     public MainFrame() {
         ExpenseManager manager = new ExpenseManager();
 
@@ -68,6 +81,7 @@ public class MainFrame extends JFrame {
         setContentPane(root);
     }
 
+    /** Builds the styled tab bar used to navigate between major app screens. */
     private JTabbedPane buildTabs() {
         JTabbedPane tabs = new JTabbedPane();
         tabs.setFont(UITheme.FONT_BUTTON);
@@ -111,13 +125,19 @@ public class MainFrame extends JFrame {
         return header;
     }
 
+    /** Returns the current month label shown in the frame header badge. */
     private String currentMonthLabel() {
         LocalDate now = LocalDate.now();
         return now.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + now.getYear();
     }
 
+    /**
+     * Custom tab UI used to give the application a softer card-like tab style
+     * than the default Swing look.
+     */
     private static final class AppTabbedPaneUI extends BasicTabbedPaneUI {
         @Override
+        /** Applies custom spacing so tabs feel more like large navigation pills. */
         protected void installDefaults() {
             super.installDefaults();
             tabInsets = new Insets(10, 18, 10, 18);
@@ -126,11 +146,13 @@ public class MainFrame extends JFrame {
         }
 
         @Override
+        /** Keeps tab height consistent regardless of the default look-and-feel font metrics. */
         protected int calculateTabHeight(int tabPlacement, int tabIndex, int fontHeight) {
             return 40;
         }
 
         @Override
+        /** Paints a rounded tab background for selected and unselected states. */
         protected void paintTabBackground(Graphics g, int tabPlacement, int tabIndex,
                                           int x, int y, int w, int h, boolean isSelected) {
             Graphics2D g2 = (Graphics2D) g.create();
@@ -141,6 +163,7 @@ public class MainFrame extends JFrame {
         }
 
         @Override
+        /** Paints the matching rounded border around each tab. */
         protected void paintTabBorder(Graphics g, int tabPlacement, int tabIndex,
                                       int x, int y, int w, int h, boolean isSelected) {
             Graphics2D g2 = (Graphics2D) g.create();
@@ -151,6 +174,7 @@ public class MainFrame extends JFrame {
         }
 
         @Override
+        /** Paints tab text using the shared project colours. */
         protected void paintText(Graphics g, int tabPlacement, Font font, FontMetrics metrics,
                                  int tabIndex, String title, Rectangle textRect, boolean isSelected) {
             g.setFont(font);

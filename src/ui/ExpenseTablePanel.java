@@ -1,3 +1,10 @@
+/**
+ * File: ExpenseTablePanel.java
+ * Purpose: Displays expense history with search, filtering, sorting, and delete support.
+ *
+ * It is both a detailed review screen and part of the observer refresh flow,
+ * which is why it reloads itself whenever shared expense data changes.
+ */
 package ui;
 
 import model.Expense;
@@ -54,6 +61,12 @@ public class ExpenseTablePanel extends JPanel implements Observer {
     private       List<Expense>     currentExpenses = new ArrayList<>();
     private       boolean           syncingFilterOptions;
 
+    /**
+     * Builds the transactions page and subscribes it to shared expense updates.
+     *
+     * The table is wired once here, then repopulated inside update() whenever
+     * the observer flow reports that shared data has changed.
+     */
     public ExpenseTablePanel(ExpenseManager manager) {
         this.manager = manager;
         manager.addObserver(this);
@@ -79,6 +92,7 @@ public class ExpenseTablePanel extends JPanel implements Observer {
     // Build helpers
     // ----------------------------------------------------------------
 
+    /** Creates the non-editable table model used by the transactions table. */
     private DefaultTableModel buildTableModel() {
         String[] columns = {"ID", "Date", "Category", "Description", "Amount ($)"};
         return new DefaultTableModel(columns, 0) {
@@ -92,6 +106,7 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         };
     }
 
+    /** Builds the styled JTable that displays expense history. */
     private JTable buildTable() {
         JTable t = new JTable(tableModel) {
             @Override
@@ -156,12 +171,14 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         return t;
     }
 
+    /** Creates the sorter so numeric amount sorting behaves correctly. */
     private TableRowSorter<DefaultTableModel> buildRowSorter() {
         TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(tableModel);
         sorter.setComparator(4, Comparator.comparingDouble(value -> ((Number) value).doubleValue()));
         return sorter;
     }
 
+    /** Builds the page title and filter controls shown above the table. */
     private JPanel buildTopBar() {
         JPanel wrapper = new JPanel();
         wrapper.setOpaque(false);
@@ -232,6 +249,7 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         return wrapper;
     }
 
+    /** Builds the card that switches between the real table and state messages. */
     private JPanel buildTableCard() {
         JScrollPane scroll = new JScrollPane(table);
         scroll.setBorder(new LineBorder(BORDER_CLR, 1, true));
@@ -245,6 +263,7 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         return contentPanel;
     }
 
+    /** Builds the footer area that shows action feedback and delete controls. */
     private JPanel buildBottomBar() {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setOpaque(false);
@@ -264,6 +283,7 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         return bar;
     }
 
+    /** Builds the empty/unavailable state shown when the table should be hidden. */
     private JPanel buildStatePanel() {
         JPanel statePanel = new JPanel(new GridBagLayout());
         statePanel.setBackground(CARD_BG);
@@ -293,6 +313,7 @@ public class ExpenseTablePanel extends JPanel implements Observer {
     // Event handling
     // ----------------------------------------------------------------
 
+    /** Deletes the currently selected expense after user confirmation. */
     private void deleteSelectedExpense() {
         int selectedRow = table.getSelectedRow();
         if (selectedRow == -1) {
@@ -361,6 +382,7 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         return panel;
     }
 
+    /** Rebuilds the category filter choices from the latest loaded expense list. */
     private void populateCategoryFilterOptions(List<Expense> expenses) {
         String selected = categoryFilterBox == null || categoryFilterBox.getSelectedItem() == null
             ? "All Categories"
@@ -389,6 +411,7 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         syncingFilterOptions = false;
     }
 
+    /** Applies the current search text and category filter to the row sorter. */
     private void applyFilters() {
         if (rowSorter == null || searchField == null || categoryFilterBox == null) {
             return;
@@ -423,6 +446,7 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         refreshVisibleState();
     }
 
+    /** Chooses whether to show the table, an empty state, or a filtered-no-match state. */
     private void refreshVisibleState() {
         int totalCount = currentExpenses.size();
         int visibleCount = rowSorter.getViewRowCount();
@@ -464,6 +488,7 @@ public class ExpenseTablePanel extends JPanel implements Observer {
     // ----------------------------------------------------------------
 
     @Override
+    /** Reloads table data from ExpenseManager after an observer notification. */
     public void update() {
         tableModel.setRowCount(0);
 

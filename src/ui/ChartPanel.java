@@ -1,3 +1,10 @@
+/**
+ * File: ChartPanel.java
+ * Purpose: Renders the dashboard's category-spending pie chart.
+ *
+ * It bridges JFreeChart with the Swing dashboard while keeping chart-building
+ * details out of the higher-level container panels.
+ */
 package ui;
 
 import observer.ExpenseManager;
@@ -35,6 +42,9 @@ public class ChartPanel extends JPanel implements Observer {
 
     private final ExpenseManager manager;
 
+    /**
+     * Creates the dashboard chart panel and subscribes it to shared data updates.
+     */
     public ChartPanel(ExpenseManager manager) {
         this.manager = manager;
         manager.addObserver(this);
@@ -44,6 +54,12 @@ public class ChartPanel extends JPanel implements Observer {
     }
 
     @Override
+    /**
+     * Rebuilds the chart area from the latest monthly category totals.
+     *
+     * The panel recreates its content on each update because that keeps the
+     * chart and empty-state logic straightforward for a small project.
+     */
     public void update() {
         removeAll();
 
@@ -91,6 +107,12 @@ public class ChartPanel extends JPanel implements Observer {
         repaint();
     }
 
+    /**
+     * Builds the styled JFreeChart pie chart from category totals.
+     *
+     * Chart configuration is kept in one method so the update path stays
+     * focused on state handling rather than chart styling details.
+     */
     private JFreeChart buildChart(Map<String, Double> spending) {
         DefaultPieDataset dataset = new DefaultPieDataset();
         for (Map.Entry<String, Double> entry : spending.entrySet()) {

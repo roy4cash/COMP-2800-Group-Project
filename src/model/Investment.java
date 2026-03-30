@@ -1,3 +1,10 @@
+/**
+ * File: Investment.java
+ * Purpose: Plain model object representing one investment holding.
+ *
+ * Besides storing database-backed values, the class also exposes derived
+ * portfolio metrics such as total cost and gain/loss.
+ */
 package model;
 
 /**
@@ -58,15 +65,25 @@ public class Investment {
     // Stored field getters
     // ----------------------------------------------------------------
 
+    /** Returns the investment row's primary key. */
     public int    getId()           { return id; }
+    /** Returns the user ID that owns the holding. */
     public int    getUserId()       { return userId; }
+    /** Returns the human-readable investment name. */
     public String getName()         { return name; }
+    /** Returns the ticker symbol, when one exists. */
     public String getTicker()       { return ticker; }
+    /** Returns the asset type shown in the UI. */
     public String getType()         { return type; }
+    /** Returns the number of shares or units held. */
     public double getShares()       { return shares; }
+    /** Returns the original buy price per share. */
     public double getBuyPrice()     { return buyPrice; }
+    /** Returns the current price per share. */
     public double getCurrentPrice() { return currentPrice; }
+    /** Returns the stored purchase date string. */
     public String getPurchaseDate() { return purchaseDate; }
+    /** Returns any optional notes saved with the holding. */
     public String getNotes()        { return notes; }
 
     // ----------------------------------------------------------------

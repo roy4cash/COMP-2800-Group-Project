@@ -1,3 +1,10 @@
+/**
+ * File: DashboardPanel.java
+ * Purpose: Combines high-level budget, chart, and activity widgets into one page.
+ *
+ * This panel is intentionally compositional: it arranges smaller observer-aware
+ * panels rather than re-implementing their logic.
+ */
 package ui;
 
 import observer.ExpenseManager;
@@ -18,6 +25,12 @@ public class DashboardPanel extends JPanel {
 
     private static final Color BG = new Color(248, 250, 252);
 
+    /**
+     * Builds the dashboard from smaller reusable panels.
+     *
+     * This composition keeps each widget focused on one responsibility while
+     * still giving the dashboard a richer, product-like layout.
+     */
     public DashboardPanel(ExpenseManager manager) {
         setBackground(BG);
         setLayout(new BorderLayout());
@@ -67,6 +80,7 @@ public class DashboardPanel extends JPanel {
         add(content, BorderLayout.CENTER);
     }
 
+    /** Builds the title and subtitle shown at the top of the dashboard page. */
     private JPanel buildHeader() {
         JPanel header = new JPanel();
         header.setOpaque(false);

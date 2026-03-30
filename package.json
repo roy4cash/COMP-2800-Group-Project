@@ -8,6 +8,7 @@
   },
   "scripts": {
     "generate:urd": "node generate_ur.js",
+    "generate:submission-docs": "node generate_submission_docs.js",
     "test": "echo \"No automated Node test suite is configured for this repository.\""
   },
   "keywords": [],

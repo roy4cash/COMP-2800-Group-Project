@@ -1,3 +1,10 @@
+/**
+ * File: ExpenseManager.java
+ * Purpose: Central business-logic coordinator for expenses and budgets.
+ *
+ * This class sits between Swing panels and DAO classes and also acts as the
+ * Subject in the project's Observer Pattern implementation.
+ */
 package observer;
 
 import db.BudgetDAO;
@@ -34,6 +41,12 @@ public class ExpenseManager implements Subject {
 
     private final List<Observer> observers = new ArrayList<>();
 
+    /**
+     * Creates the shared expense/budget manager and its supporting DAOs.
+     *
+     * The default user is ensured here because all later insert operations
+     * assume the single-user record already exists.
+     */
     public ExpenseManager() {
         this.expenseDAO  = new ExpenseDAO();
         this.budgetDAO   = new BudgetDAO();
@@ -73,12 +86,15 @@ public class ExpenseManager implements Subject {
     // Observer pattern
     // ----------------------------------------------------------------
 
+    /** Registers one observer for future refresh notifications. */
     @Override
     public void addObserver(Observer o)    { observers.add(o); }
 
+    /** Removes one observer from the notification list. */
     @Override
     public void removeObserver(Observer o) { observers.remove(o); }
 
+    /** Notifies all registered observers after a successful data change. */
     @Override
     public void notifyObservers() {
         for (Observer o : observers) {

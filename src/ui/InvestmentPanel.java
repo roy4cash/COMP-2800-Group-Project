@@ -1,3 +1,10 @@
+/**
+ * File: InvestmentPanel.java
+ * Purpose: Provides the standalone investment-tracking feature of the project.
+ *
+ * Unlike expense screens, this panel talks directly to InvestmentDAO and
+ * refreshes itself after user actions such as add, delete, and manual reload.
+ */
 package ui;
 
 import db.InvestmentDAO;
@@ -81,6 +88,12 @@ public class InvestmentPanel extends JPanel {
     private JLabel            tableStateTitleLabel;
     private JLabel            tableStateBodyLabel;
 
+    /**
+     * Creates the Investments page and prepares its backing table if needed.
+     *
+     * The investments feature owns its own refresh cycle, so the constructor
+     * performs the first table-setup and data-load pass directly.
+     */
     public InvestmentPanel() {
         // Create the DB table on first run — IF NOT EXISTS is idempotent
         tableSetupError = dao.createTableIfNotExists();
@@ -96,6 +109,7 @@ public class InvestmentPanel extends JPanel {
     // UI construction
     // ----------------------------------------------------------------
 
+    /** Builds the scrollable page layout for the Investments tab. */
     private void buildUI() {
         JPanel content = new JPanel();
         content.setBackground(BG);
@@ -128,6 +142,7 @@ public class InvestmentPanel extends JPanel {
 
     // ---- Header ----
 
+    /** Builds the page title area and manual refresh action. */
     private JPanel buildHeaderRow() {
         JPanel row = new JPanel(new BorderLayout());
         row.setBackground(BG);
@@ -151,6 +166,7 @@ public class InvestmentPanel extends JPanel {
 
     // ---- Stats cards ----
 
+    /** Builds the portfolio summary cards shown above the form and table. */
     private JPanel buildStatsRow() {
         JPanel row = new JPanel(new GridLayout(2, 3, 16, 16));
         row.setBackground(BG);
@@ -179,6 +195,7 @@ public class InvestmentPanel extends JPanel {
 
     // ---- Add Investment form ----
 
+    /** Builds the add-investment form card used to capture new holdings. */
     private JPanel buildFormCard() {
         // Card with title bar
         JLabel titleLabel = new JLabel("  Add Investment");
@@ -301,6 +318,7 @@ public class InvestmentPanel extends JPanel {
 
     // ---- Investments table ----
 
+    /** Builds the holdings table card and its empty/unavailable states. */
     private JPanel buildTablePanel() {
         // Card wrapper
         JLabel titleLabel = new JLabel("  My Investments");
@@ -365,6 +383,7 @@ public class InvestmentPanel extends JPanel {
         return card;
     }
 
+    /** Builds the placeholder panel shown when the holdings table has no rows to show. */
     private JPanel buildTableStatePanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBackground(CARD_BG);
@@ -398,6 +417,7 @@ public class InvestmentPanel extends JPanel {
      * Reloads all investments from the database, rebuilds the table rows,
      * and recalculates the portfolio summary cards.
      */
+    /** Reloads holdings from the database and rebuilds the summary state. */
     private void loadData() {
         if (tableSetupError != null) {
             tableSetupError = dao.createTableIfNotExists();
@@ -478,6 +498,7 @@ public class InvestmentPanel extends JPanel {
     // ----------------------------------------------------------------
 
     /** Validates and submits the Add Investment form. */
+    /** Validates the investment form, saves through the DAO, and refreshes the page. */
     private void handleAddInvestment() {
         String name         = nameField.getText().trim();
         String ticker       = tickerField.getText().trim();

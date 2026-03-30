@@ -1,3 +1,10 @@
+/**
+ * File: UITheme.java
+ * Purpose: Centralizes colors, fonts, and reusable Swing component styling.
+ *
+ * This file acts as the project's small design system so visual changes can be
+ * made consistently without editing every panel separately.
+ */
 package util;
 
 import javax.swing.*;

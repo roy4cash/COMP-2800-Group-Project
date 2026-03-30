@@ -1,3 +1,10 @@
+/**
+ * File: DBConnection.java
+ * Purpose: Central place for creating MySQL JDBC connections.
+ *
+ * By keeping connection setup in one helper, every DAO follows the same
+ * runtime configuration rules and surfaces consistent deployment errors.
+ */
 package db;
 
 import java.sql.Connection;
@@ -21,9 +28,16 @@ public class DBConnection {
     private static final String USER_ENV     = "FAT_DB_USER";
     private static final String PASSWORD_ENV = "FAT_DB_PASSWORD";
 
+    /** Prevents instantiation because the class only exposes static helpers. */
     private DBConnection() {}
 
-    /** Returns a brand-new connection each time. Caller is responsible for closing it. */
+    /**
+     * Creates a brand-new JDBC connection using the current runtime settings.
+     *
+     * The project opens one fresh connection per DAO operation because the
+     * expected usage is small and this approach is easier to explain than
+     * connection pooling in a student project.
+     */
     public static Connection getConnection() throws SQLException {
         String url      = readSetting(URL_PROPERTY, URL_ENV);
         String user     = readSetting(USER_PROPERTY, USER_ENV);
@@ -49,6 +63,10 @@ public class DBConnection {
         return DriverManager.getConnection(url, user, password);
     }
 
+    /**
+     * Loads the MySQL driver explicitly so missing-jar problems produce a
+     * clearer error than a later DriverManager failure.
+     */
     private static void loadMySqlDriver() throws SQLException {
         try {
             Class.forName(MYSQL_DRIVER);
@@ -61,6 +79,10 @@ public class DBConnection {
         }
     }
 
+    /**
+     * Reads a configuration value from Java properties first, then from the
+     * matching environment variable as a fallback.
+     */
     private static String readSetting(String propertyName, String envName) {
         String value = System.getProperty(propertyName);
         if (value == null || value.isBlank()) {

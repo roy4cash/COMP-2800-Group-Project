@@ -1,3 +1,11 @@
+/**
+ * File: Main.java
+ * Purpose: Application entry point for the Financial Activity Tracker desktop app.
+ *
+ * This file is responsible for preparing the Swing look-and-feel and then
+ * launching the main window on the Event Dispatch Thread so UI creation
+ * follows Swing's threading rules.
+ */
 package app;
 
 import ui.MainFrame;
@@ -12,6 +20,12 @@ import java.awt.*;
  */
 public class Main {
 
+    /**
+     * Starts the FAT desktop application.
+     *
+     * Nimbus look-and-feel is configured before any frames are created so the
+     * whole interface inherits the same styling from startup.
+     */
     public static void main(String[] args) {
         // Apply modern Nimbus L&F with custom colours before any UI is created
         try {
@@ -32,6 +46,8 @@ public class Main {
             System.err.println("Could not apply Nimbus L&F: " + e.getMessage());
         }
 
+        // Swing UI work should happen on the EDT so painting and event handling
+        // stay predictable across platforms.
         SwingUtilities.invokeLater(() -> {
             MainFrame frame = new MainFrame();
             frame.setVisible(true);

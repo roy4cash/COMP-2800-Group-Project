@@ -1,3 +1,10 @@
+/**
+ * File: ExpenseDAO.java
+ * Purpose: Performs JDBC CRUD and aggregate queries for expense records.
+ *
+ * This DAO supports both transaction-style screens and analytics screens,
+ * which is why it includes row loading as well as grouped summary queries.
+ */
 package db;
 
 import model.Expense;
@@ -102,12 +109,22 @@ public class ExpenseDAO {
         }
     }
 
-    /** Last error encountered while loading the transactions list, or null if the last load succeeded. */
+    /**
+     * Returns the last error encountered while loading detailed expense rows.
+     *
+     * The UI uses this to distinguish between "no data" and "data could not
+     * be loaded".
+     */
     public String getLastLoadErrorMessage() {
         return lastLoadErrorMessage;
     }
 
-    /** Returns the total amount spent by the user in the given month/year. */
+    /**
+     * Returns the total amount spent by the user during one reporting month.
+     *
+     * The query uses a start date and exclusive end date because that pattern
+     * is reliable for month-based filtering.
+     */
     public double getTotalForMonth(int userId, int month, int year) {
         lastAggregateErrorMessage = null;
         LocalDate startDate = LocalDate.of(year, month, 1);
@@ -134,7 +151,7 @@ public class ExpenseDAO {
         return 0.0;
     }
 
-    /** Returns the number of expenses recorded in the given month/year. */
+    /** Returns how many expenses were recorded during one reporting month. */
     public int getExpenseCountForMonth(int userId, int month, int year) {
         lastAggregateErrorMessage = null;
         LocalDate startDate = LocalDate.of(year, month, 1);
@@ -162,8 +179,10 @@ public class ExpenseDAO {
     }
 
     /**
-     * Returns a map of category name -> total spent for the current month.
-     * Used to build the pie chart.
+     * Returns category totals for the requested month.
+     *
+     * A LinkedHashMap is used so the SQL ordering by total descending is
+     * preserved for charts and top-category summaries.
      */
     public Map<String, Double> getSpendingByCategory(int userId, int month, int year) {
         Map<String, Double> result = new LinkedHashMap<>();
@@ -198,7 +217,7 @@ public class ExpenseDAO {
         return result;
     }
 
-    /** Last error encountered while loading monthly totals/counts/charts, or null if the last load succeeded. */
+    /** Returns the last error encountered while loading aggregate expense data. */
     public String getLastAggregateErrorMessage() {
         return lastAggregateErrorMessage;
     }

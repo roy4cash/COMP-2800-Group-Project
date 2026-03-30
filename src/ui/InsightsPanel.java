@@ -1,3 +1,10 @@
+/**
+ * File: InsightsPanel.java
+ * Purpose: Shows calculated current-month spending metrics and guidance.
+ *
+ * This panel combines observer-driven data refreshes with chart rendering and
+ * business-friendly narrative text so the project feels more substantial.
+ */
 package ui;
 
 import observer.ExpenseManager;
@@ -56,6 +63,12 @@ public class InsightsPanel extends JPanel implements Observer {
     private JPanel chartHolder;
     private JPanel tipsPanel;
 
+    /**
+     * Creates the insights page and keeps a reference to the shared manager.
+     *
+     * The page is observer-driven, so its sections are built once and then
+     * refreshed in place whenever expense or budget data changes.
+     */
     public InsightsPanel(ExpenseManager manager) {
         this.manager = manager;
         setBackground(BG);
@@ -81,6 +94,7 @@ public class InsightsPanel extends JPanel implements Observer {
     // Initial UI construction
     // ----------------------------------------------------------------
 
+    /** Builds the scrollable page structure for the Insights tab. */
     private void buildUI() {
         // Outer scroll pane so nothing gets clipped on small windows
         JPanel content = new JPanel(new GridBagLayout());
@@ -155,6 +169,7 @@ public class InsightsPanel extends JPanel implements Observer {
     // ---- Stat cards ----
 
     /** Populates the 4-card statistics row with live data. */
+    /** Fills the stat-card area with the latest current-month analytics. */
     private void populateStats(JPanel row) {
         row.removeAll();
 
@@ -245,6 +260,7 @@ public class InsightsPanel extends JPanel implements Observer {
     // ---- Bar chart ----
 
     /** Populates the chart container with a JFreeChart bar chart. */
+    /** Builds the current-month category chart or a matching empty/error state. */
     private void populateChart(JPanel holder) {
         holder.removeAll();
 
@@ -331,6 +347,7 @@ public class InsightsPanel extends JPanel implements Observer {
     // ---- Tips section ----
 
     /** Populates the tips panel with 2-3 personalized financial tips. */
+    /** Builds the narrative tips section from the latest analytics results. */
     private void populateTips(JPanel panel) {
         panel.removeAll();
         panel.setLayout(new BorderLayout());

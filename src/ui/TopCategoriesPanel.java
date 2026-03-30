@@ -1,3 +1,10 @@
+/**
+ * File: TopCategoriesPanel.java
+ * Purpose: Highlights the highest-spending categories for the current month.
+ *
+ * This compact dashboard widget gives users a quick category breakdown without
+ * requiring them to switch to the larger Insights page.
+ */
 package ui;
 
 import observer.ExpenseManager;
@@ -24,6 +31,7 @@ public class TopCategoriesPanel extends JPanel implements Observer {
     private final ExpenseManager manager;
     private final JPanel bodyPanel = new JPanel();
 
+    /** Creates the top-categories dashboard card and subscribes it to updates. */
     public TopCategoriesPanel(ExpenseManager manager) {
         this.manager = manager;
         manager.addObserver(this);
@@ -34,6 +42,7 @@ public class TopCategoriesPanel extends JPanel implements Observer {
         update();
     }
 
+    /** Builds the outer card shell used to display top category rows. */
     private JPanel buildCard() {
         JLabel titleLabel = new JLabel("  Top Categories");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
@@ -55,6 +64,7 @@ public class TopCategoriesPanel extends JPanel implements Observer {
     }
 
     @Override
+    /** Reloads the top categories or an empty/error message for the dashboard. */
     public void update() {
         bodyPanel.removeAll();
 
@@ -87,6 +97,7 @@ public class TopCategoriesPanel extends JPanel implements Observer {
         repaint();
     }
 
+    /** Builds one category row with a label, amount summary, and progress bar. */
     private JPanel createCategoryRow(String name, double amount, double total) {
         JPanel row = new JPanel();
         row.setOpaque(false);
@@ -121,6 +132,7 @@ public class TopCategoriesPanel extends JPanel implements Observer {
         return row;
     }
 
+    /** Creates a message label used when there is no category summary to show. */
     private JComponent createMessageLabel(String text) {
         JLabel label = new JLabel("<html><div style='width:250px; line-height:1.5'>" + text + "</div></html>");
         label.setFont(new Font("Segoe UI", Font.PLAIN, 12));

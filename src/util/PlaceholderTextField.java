@@ -1,3 +1,10 @@
+/**
+ * File: PlaceholderTextField.java
+ * Purpose: Adds placeholder-text behavior to standard Swing text fields.
+ *
+ * This keeps forms visually clear without using pre-filled values that might
+ * be mistaken for real input.
+ */
 package util;
 
 import javax.swing.*;
@@ -48,6 +55,12 @@ public class PlaceholderTextField extends JTextField {
      * the standard empty-field background when there is no user input.
      */
     @Override
+    /**
+     * Paints placeholder text only when the field is empty and unfocused.
+     *
+     * Drawing the placeholder during painting keeps the real document model
+     * clean, which is safer than storing hint text as actual field content.
+     */
     protected void paintComponent(Graphics g) {
         // Always let Swing paint the normal field background/border/text first
         super.paintComponent(g);
