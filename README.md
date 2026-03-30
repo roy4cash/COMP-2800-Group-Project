@@ -1,115 +1,93 @@
-# FAT — Financial Activity Tracker
+# FAT - Financial Activity Tracker
 
-A Java Swing desktop application for tracking personal expenses.
-Built for COMP 2800 as a group project.
+Financial Activity Tracker (FAT) is a Java Swing desktop application for tracking expenses, monthly budgets, and investments.
 
----
+The submission stack is:
+- Java Swing
+- MySQL
+- JDBC
+- JFreeChart
+- Azure VM
 
-## Tech Stack
+The desktop app is the primary deliverable. The repository also includes aligned submission docs in `docs/`, a Word document generator for `FAT_User_Requirements.docx`, and a small static `web/` page that explains the project.
 
-| Layer     | Technology                  |
-|-----------|-----------------------------|
-| Language  | Java 11+                    |
-| GUI       | Java Swing                  |
-| Database  | MySQL 8                     |
-| DB Access | JDBC                        |
-| Charts    | JFreeChart 1.5+             |
+## Quick Start
 
----
+1. Install JDK 21.
+2. Install MySQL Server on the Azure VM or target machine.
+3. Create a MySQL database named `fat`.
+4. Run `sql/fat_schema.sql` against that database.
+5. Place MySQL Connector/J in `lib/`.
+   Recommended file name: `mysql-connector-j-8.4.0.jar`
+6. Set the database environment variables:
 
-## Project Structure
-
-```
-FAT/
-├── src/
-│   ├── app/          Main.java               — entry point
-│   ├── model/        User, Category,         — plain data classes (POJOs)
-│   │                 Budget, Expense
-│   ├── db/           DBConnection,           — all database access (JDBC)
-│   │                 ExpenseDAO, BudgetDAO,
-│   │                 CategoryDAO
-│   ├── observer/     Observer, Subject,      — Observer pattern
-│   │                 ExpenseManager
-│   ├── ui/           MainFrame,              — all Swing panels
-│   │                 AddExpensePanel,
-│   │                 ExpenseTablePanel,
-│   │                 DashboardPanel,
-│   │                 SummaryPanel,
-│   │                 AlertPanel,
-│   │                 ChartPanel
-│   └── util/         ValidationUtils,        — helpers (no UI, no DB)
-│                     DateUtils
-├── sql/
-│   └── fat_schema.sql                        — database setup + seed data
-├── lib/                                      — place JARs here
-└── README.md
+```powershell
+$env:FAT_DB_URL = "jdbc:mysql://localhost:3306/fat?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true"
+$env:FAT_DB_USER = "root"
+$env:FAT_DB_PASSWORD = "YOUR_PASSWORD"
 ```
 
----
+7. Compile from the repository root:
 
-## Setup
-
-### 1. Database
-```sql
--- Run this in MySQL Workbench or the mysql CLI:
-SOURCE path/to/FAT/sql/fat_schema.sql;
-```
-
-### 2. Update credentials
-Open `src/db/DBConnection.java` and change:
-```java
-private static final String DB_USER     = "root";
-private static final String DB_PASSWORD = "root";
-```
-
-### 3. Add JARs to `/lib`
-Download and place in `lib/`:
-- `mysql-connector-j-8.x.jar`
-- `jfreechart-1.5.x.jar`
-- `jcommon-1.0.x.jar`
-
-### 4. Compile
 ```bash
-javac -cp "lib/*" -d out $(find src -name "*.java")
+javac -cp "lib/*" -d out @sources.txt
 ```
 
-### 5. Run
+8. Run the desktop app:
+
+Windows:
+
 ```bash
-java -cp "out;lib/*" app.Main          # Windows
-java -cp "out:lib/*" app.Main          # Mac / Linux
+java -cp "out;lib/*" app.Main
 ```
 
----
+macOS/Linux:
 
-## Design Patterns Used
-
-### Observer Pattern
-`ExpenseManager` is the **Subject**.
-`ExpenseTablePanel`, `SummaryPanel`, `AlertPanel`, and `ChartPanel` are **Observers**.
-
-When you add or delete an expense, `ExpenseManager.notifyObservers()` is called
-and all four panels refresh themselves automatically — with no direct coupling between them.
-
-```
-User clicks "Add Expense"
-    → AddExpensePanel.handleAddExpense()
-        → ExpenseManager.addExpense()         (saves to MySQL)
-            → notifyObservers()
-                → ExpenseTablePanel.update()  (reloads table)
-                → SummaryPanel.update()       (recalculates totals)
-                → AlertPanel.update()         (re-checks budget %)
-                → ChartPanel.update()         (redraws pie chart)
+```bash
+java -cp "out:lib/*" app.Main
 ```
 
----
+If the MySQL driver jar is missing, the app now reports that clearly at runtime.
 
-## Features
+## Azure VM Demo Setup
 
-- Add and delete expenses
-- Assign expenses to categories
-- Set a monthly budget
-- Remaining budget displayed in real time
-- Warning at 80% usage; error message when over budget
-- Full transaction history table
-- Pie chart of spending by category
-- All data persisted in MySQL
+Recommended grading setup:
+- Windows Azure VM with a desktop environment
+- MySQL Server installed locally on the same VM
+- repository copied onto the VM
+- app launched manually with `javac` and `java`
+
+The deployment steps are documented in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Documentation
+
+- [Dependencies and Setup](docs/DEPENDENCIES.md)
+- [Deployment Guide](docs/DEPLOYMENT.md)
+- [User Guide](docs/USER_GUIDE.md)
+- [Design and Architecture](docs/DESIGN.md)
+
+## Implementation Notes
+
+- The app is single-user and uses a default session mapped to `user_id = 1`.
+- Expenses and budgets refresh through the Observer pattern via `ExpenseManager`.
+- Dashboard and Insights are scoped to the current calendar month.
+- The Investments tab stores data in the same MySQL database but refreshes through its own panel flow.
+- The `investments` table is created automatically when the Investments tab is opened.
+- `sources.txt` is the canonical Java source list used for compilation.
+
+## Repository Layout
+
+- `src/` Java source code
+- `sql/fat_schema.sql` MySQL schema for `users`, `categories`, `budgets`, and `expenses`
+- `lib/` runtime JAR dependencies
+- `sources.txt` source list used by `javac`
+- `docs/` submission-facing documentation
+- `generate_ur.js` Word document generator
+- `web/` static informational page
+
+## Regenerate The Word Submission Document
+
+```bash
+npm install
+npm run generate:urd
+```

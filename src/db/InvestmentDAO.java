@@ -16,10 +16,12 @@ import java.util.List;
  */
 public class InvestmentDAO {
 
+    private String lastLoadErrorMessage;
+
     // DDL — executed once when InvestmentPanel is constructed
     private static final String CREATE_TABLE_SQL =
         "CREATE TABLE IF NOT EXISTS investments (" +
-        "  id            SERIAL PRIMARY KEY," +
+        "  id            INT AUTO_INCREMENT PRIMARY KEY," +
         "  user_id       INT NOT NULL," +
         "  name          VARCHAR(100) NOT NULL," +
         "  ticker        VARCHAR(20)," +
@@ -27,24 +29,28 @@ public class InvestmentDAO {
         "  shares        DECIMAL(15,6) NOT NULL DEFAULT 0," +
         "  buy_price     DECIMAL(15,2) NOT NULL," +
         "  current_price DECIMAL(15,2) DEFAULT 0," +
-        "  purchase_date VARCHAR(20)," +
+        "  purchase_date DATE," +
         "  notes         VARCHAR(255)," +
-        "  created_at    TIMESTAMP DEFAULT NOW()" +
-        ")";
+        "  created_at    DATETIME DEFAULT CURRENT_TIMESTAMP," +
+        "  KEY idx_investments_user_created (user_id, created_at)," +
+        "  CONSTRAINT fk_investments_user FOREIGN KEY (user_id) REFERENCES users(id)" +
+        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
     /**
      * Creates the investments table if it does not already exist.
      * Safe to call on every application startup — IF NOT EXISTS prevents errors.
      */
-    public void createTableIfNotExists() {
+    public String createTableIfNotExists() {
         try (Connection conn = DBConnection.getConnection();
              Statement  stmt = conn.createStatement()) {
 
             stmt.execute(CREATE_TABLE_SQL);
             System.out.println("InvestmentDAO: investments table ready.");
+            return null;
 
         } catch (SQLException e) {
             System.err.println("InvestmentDAO.createTableIfNotExists: " + e.getMessage());
+            return e.getMessage();
         }
     }
 
@@ -56,6 +62,7 @@ public class InvestmentDAO {
      */
     public List<Investment> getAllInvestments(int userId) {
         List<Investment> list = new ArrayList<>();
+        lastLoadErrorMessage = null;
         String sql =
             "SELECT id, user_id, name, ticker, type, shares, buy_price, current_price, " +
             "       purchase_date, notes " +
@@ -86,6 +93,7 @@ public class InvestmentDAO {
 
         } catch (SQLException e) {
             System.err.println("InvestmentDAO.getAllInvestments: " + e.getMessage());
+            lastLoadErrorMessage = e.getMessage();
         }
 
         return list;
@@ -104,9 +112,9 @@ public class InvestmentDAO {
      * @param date          purchase date as YYYY-MM-DD string
      * @param notes         optional notes
      */
-    public void addInvestment(int userId, String name, String ticker, String type,
-                              double shares, double buyPrice, double currentPrice,
-                              String date, String notes) {
+    public String addInvestment(int userId, String name, String ticker, String type,
+                                double shares, double buyPrice, double currentPrice,
+                                String date, String notes) {
         String sql =
             "INSERT INTO investments " +
             "  (user_id, name, ticker, type, shares, buy_price, current_price, purchase_date, notes) " +
@@ -122,12 +130,14 @@ public class InvestmentDAO {
             ps.setDouble(5, shares);
             ps.setDouble(6, buyPrice);
             ps.setDouble(7, currentPrice);
-            ps.setString(8, date);
+            ps.setDate(8, java.sql.Date.valueOf(date));
             ps.setString(9, notes);
             ps.executeUpdate();
+            return null;
 
         } catch (SQLException e) {
             System.err.println("InvestmentDAO.addInvestment: " + e.getMessage());
+            return e.getMessage();
         }
     }
 
@@ -158,17 +168,27 @@ public class InvestmentDAO {
      *
      * @param id  the database primary key of the investment to remove
      */
-    public void deleteInvestment(int id) {
+    public String deleteInvestment(int id) {
         String sql = "DELETE FROM investments WHERE id = ?";
 
         try (Connection       conn = DBConnection.getConnection();
              PreparedStatement ps   = conn.prepareStatement(sql)) {
 
             ps.setInt(1, id);
-            ps.executeUpdate();
+            int deleted = ps.executeUpdate();
+            if (deleted == 0) {
+                return "Investment not found. It may have already been removed.";
+            }
+            return null;
 
         } catch (SQLException e) {
             System.err.println("InvestmentDAO.deleteInvestment: " + e.getMessage());
+            return e.getMessage();
         }
+    }
+
+    /** Last error encountered while loading investments, or null if the last load succeeded. */
+    public String getLastLoadErrorMessage() {
+        return lastLoadErrorMessage;
     }
 }

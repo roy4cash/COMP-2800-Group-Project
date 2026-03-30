@@ -1,17 +1,24 @@
 package ui;
 
+import model.Budget;
 import model.Category;
 import observer.ExpenseManager;
 import util.DateUtils;
+import util.DbErrorFormatter;
 import util.PlaceholderTextField;
 import util.UITheme;
 import util.ValidationUtils;
 
 import javax.swing.*;
 import javax.swing.border.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.JTextComponent;
 import java.awt.*;
 import java.time.LocalDate;
+import java.time.format.TextStyle;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Form panel for adding a new expense and setting the monthly budget.
@@ -28,6 +35,7 @@ public class AddExpensePanel extends JPanel {
     // ---- Colour scheme shared across all panels ----
     private static final Color PRIMARY    = new Color(37,  99,  235);
     private static final Color SUCCESS    = new Color(16,  185, 129);
+    private static final Color WARNING    = new Color(245, 158, 11);
     private static final Color DANGER     = new Color(239, 68,  68);
     private static final Color BG         = new Color(248, 250, 252);
     private static final Color CARD_BG    = Color.WHITE;
@@ -37,8 +45,6 @@ public class AddExpensePanel extends JPanel {
 
     private static final Font LABEL_FONT = new Font("Segoe UI", Font.BOLD,  12);
     private static final Font FIELD_FONT = new Font("Segoe UI", Font.PLAIN, 13);
-    private static final Font BTN_FONT   = new Font("Segoe UI", Font.BOLD,  13);
-
     // ---- Business logic ----
     private final ExpenseManager manager;
 
@@ -48,13 +54,21 @@ public class AddExpensePanel extends JPanel {
     private PlaceholderTextField  amountField;
     private JTextField            dateField;
     private JTextField            budgetField;
-    private JLabel                statusLabel;
+    private JLabel                expenseStatusLabel;
+    private JLabel                budgetStatusLabel;
+    private JLabel                categoryHintLabel;
+    private JLabel                budgetInfoLabel;
+    private JButton               addExpenseButton;
+    private JButton               setBudgetButton;
 
     public AddExpensePanel(ExpenseManager manager) {
         this.manager = manager;
         setBackground(BG);
         setLayout(new GridBagLayout());
         buildUI();
+        wireStatusResetters();
+        loadCategories();
+        loadCurrentBudget();
     }
 
     // ----------------------------------------------------------------
@@ -88,8 +102,12 @@ public class AddExpensePanel extends JPanel {
         // Category dropdown
         categoryBox = new JComboBox<>();
         styleCombo(categoryBox);
-        loadCategories();
         row = addRow(inner, "Category", categoryBox, row, gbc);
+
+        categoryHintLabel = createHintLabel();
+        gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+        gbc.weighty = 0; gbc.insets = new Insets(0, 16, 8, 16);
+        inner.add(categoryHintLabel, gbc);
 
         // Description — PlaceholderTextField (no pre-filled value)
         descriptionField = new PlaceholderTextField("e.g. Morning coffee");
@@ -107,11 +125,10 @@ public class AddExpensePanel extends JPanel {
         row = addRow(inner, "Date (YYYY-MM-DD)", dateField, row, gbc);
 
         // Status label — shows success or error messages
-        statusLabel = new JLabel(" ");
-        statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        expenseStatusLabel = createStatusLabel();
         gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
         gbc.weighty = 0; gbc.insets = new Insets(4, 16, 4, 16);
-        inner.add(statusLabel, gbc);
+        inner.add(expenseStatusLabel, gbc);
         gbc.gridwidth = 1;
 
         // Spacer pushes button to bottom
@@ -121,12 +138,12 @@ public class AddExpensePanel extends JPanel {
         inner.add(spacer, gbc);
 
         // Add Expense button — primary blue
-        JButton addBtn = createButton("+ Add Expense", PRIMARY);
-        addBtn.addActionListener(e -> handleAddExpense());
+        addExpenseButton = createButton("+ Add Expense", PRIMARY);
+        addExpenseButton.addActionListener(e -> handleAddExpense());
         gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2;
         gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(8, 16, 16, 16);
-        inner.add(addBtn, gbc);
+        inner.add(addExpenseButton, gbc);
 
         return card;
     }
@@ -154,8 +171,14 @@ public class AddExpensePanel extends JPanel {
         gbc.insets = new Insets(6, 16, 6, 16);
 
         // Budget amount field — show current budget if one is set, else empty
-        double current = manager.getCurrentBudget().getAmount();
-        budgetField = new JTextField(current > 0 ? String.valueOf((int) current) : "");
+        budgetInfoLabel = createHintLabel();
+        gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2; gbc.weighty = 0;
+        gbc.insets = new Insets(0, 16, 10, 16);
+        inner.add(budgetInfoLabel, gbc);
+        gbc.gridwidth = 1;
+        gbc.insets = new Insets(6, 16, 6, 16);
+
+        budgetField = new JTextField();
         budgetField.setFont(FIELD_FONT);
         budgetField.setForeground(TEXT_CLR);
         budgetField.setBackground(new Color(248, 250, 252));
@@ -165,6 +188,12 @@ public class AddExpensePanel extends JPanel {
         budgetField.setPreferredSize(new Dimension(0, 38));
         row = addRow(inner, "Budget Amount ($)", budgetField, row, gbc);
 
+        budgetStatusLabel = createStatusLabel();
+        gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+        gbc.weighty = 0; gbc.insets = new Insets(4, 16, 4, 16);
+        inner.add(budgetStatusLabel, gbc);
+        gbc.gridwidth = 1;
+
         // Spacer
         JPanel spacer = new JPanel(); spacer.setOpaque(false);
         gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2; gbc.weighty = 1.0;
@@ -172,12 +201,12 @@ public class AddExpensePanel extends JPanel {
         inner.add(spacer, gbc);
 
         // Set Budget button — green
-        JButton setBtn = createButton("Set Budget", SUCCESS);
-        setBtn.addActionListener(e -> handleSetBudget());
+        setBudgetButton = createButton("Set Budget", SUCCESS);
+        setBudgetButton.addActionListener(e -> handleSetBudget());
         gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2;
         gbc.weighty = 0; gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(8, 16, 16, 16);
-        inner.add(setBtn, gbc);
+        inner.add(setBudgetButton, gbc);
 
         return card;
     }
@@ -274,6 +303,20 @@ public class AddExpensePanel extends JPanel {
         return btn;
     }
 
+    private JLabel createStatusLabel() {
+        JLabel label = new JLabel(" ");
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        label.setForeground(LABEL_CLR);
+        return label;
+    }
+
+    private JLabel createHintLabel() {
+        JLabel label = new JLabel(" ");
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        label.setForeground(LABEL_CLR);
+        return label;
+    }
+
     /** Default GridBagConstraints for form rows. */
     private GridBagConstraints fieldGbc() {
         GridBagConstraints gbc = new GridBagConstraints();
@@ -284,15 +327,69 @@ public class AddExpensePanel extends JPanel {
         return gbc;
     }
 
+    private void wireStatusResetters() {
+        attachStatusClearer(descriptionField, expenseStatusLabel);
+        attachStatusClearer(amountField, expenseStatusLabel);
+        attachStatusClearer(dateField, expenseStatusLabel);
+        attachStatusClearer(budgetField, budgetStatusLabel);
+        categoryBox.addActionListener(e -> clearStatus(expenseStatusLabel));
+    }
+
+    private void attachStatusClearer(JTextComponent field, JLabel statusLabel) {
+        field.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { clearStatus(statusLabel); }
+            @Override public void removeUpdate(DocumentEvent e) { clearStatus(statusLabel); }
+            @Override public void changedUpdate(DocumentEvent e) { clearStatus(statusLabel); }
+        });
+    }
+
     /** Populates the category dropdown from the manager (which falls back to defaults). */
     private void loadCategories() {
         List<Category> categories = manager.getAllCategories();
+        String loadError = manager.getLastCategoryLoadError();
         categoryBox.removeAllItems();
         for (Category c : categories) {
             categoryBox.addItem(c);
         }
+        addExpenseButton.setEnabled(!categories.isEmpty() && (loadError == null || loadError.trim().isEmpty()));
+        if (!categories.isEmpty()) {
+            if (loadError != null && !loadError.trim().isEmpty()) {
+                categoryHintLabel.setForeground(WARNING);
+                categoryHintLabel.setText("Database is unavailable. Categories are shown for preview only.");
+                showStatus(expenseStatusLabel, DbErrorFormatter.format(loadError), DANGER);
+            } else {
+                categoryHintLabel.setForeground(LABEL_CLR);
+                categoryHintLabel.setText(categories.size() + (categories.size() == 1 ? " category ready." : " categories ready."));
+            }
+        }
+        if (categories.isEmpty()) {
+            categoryHintLabel.setForeground(DANGER);
+            categoryHintLabel.setText("Categories are unavailable. Check the database connection.");
+            showStatus(expenseStatusLabel, "Cannot add an expense until categories load.", DANGER);
+        }
         if (categories.isEmpty()) {
             System.err.println("AddExpensePanel: still no categories after fallback — check DB.");
+        }
+    }
+
+    private void loadCurrentBudget() {
+        Budget budget = manager.getCurrentBudget();
+        String loadError = manager.getLastBudgetLoadError();
+        double amount = budget.getAmount();
+        String monthLabel = getCurrentMonthLabel();
+        if (loadError != null && !loadError.trim().isEmpty()) {
+            budgetField.setText("");
+            budgetInfoLabel.setForeground(DANGER);
+            budgetInfoLabel.setText(DbErrorFormatter.format(loadError));
+            return;
+        }
+        budgetInfoLabel.setForeground(LABEL_CLR);
+        if (amount > 0) {
+            budgetField.setText(String.format("%.2f", amount));
+            budgetInfoLabel.setText("Current budget for " + monthLabel + ": " + String.format("$%.2f", amount));
+        } else {
+            budgetField.setText("");
+            budgetInfoLabel.setText("No budget set for " + monthLabel + " yet.");
         }
     }
 
@@ -306,34 +403,61 @@ public class AddExpensePanel extends JPanel {
         String amountText  = amountField.getText().trim();
         String dateText    = dateField.getText().trim();
 
-        // Validate inputs using existing utility
         String error = ValidationUtils.validateExpenseInput(description, amountText, dateText);
-        if (error != null) { showStatus(error, DANGER); return; }
+        if (error != null) {
+            showStatus(expenseStatusLabel, error, DANGER);
+            return;
+        }
 
         Category category = (Category) categoryBox.getSelectedItem();
-        if (category == null) { showStatus("Please select a category.", DANGER); return; }
+        if (category == null) {
+            showStatus(expenseStatusLabel, "Please select a category.", DANGER);
+            return;
+        }
 
-        double    amount = Double.parseDouble(amountText);
-        LocalDate date   = LocalDate.parse(dateText);
+        addExpenseButton.setEnabled(false);
+        try {
+            double amount = Double.parseDouble(amountText);
+            LocalDate date = LocalDate.parse(dateText);
 
-        String error = manager.addExpense(category.getId(), description, amount, date);
-        if (error == null) {
-            clearExpenseFields();
-            showStatus("Expense added successfully!", SUCCESS);
-        } else {
-            // Show the actual DB error so we know exactly what went wrong
-            showStatus("DB Error: " + error, DANGER);
+            String dbError = manager.addExpense(category.getId(), description, amount, date);
+            if (dbError == null) {
+                clearExpenseFields();
+                loadCurrentBudget();
+                showStatus(expenseStatusLabel, "Expense added to " + category.getName() + ".", SUCCESS);
+            } else {
+                showStatus(expenseStatusLabel, "Could not save expense: " + DbErrorFormatter.format(dbError), DANGER);
+            }
+        } finally {
+            addExpenseButton.setEnabled(
+                categoryBox.getItemCount() > 0 &&
+                (manager.getLastCategoryLoadError() == null || manager.getLastCategoryLoadError().trim().isEmpty())
+            );
         }
     }
 
     private void handleSetBudget() {
         String budgetText = budgetField.getText().trim();
-        if (!ValidationUtils.isPositiveNumber(budgetText)) {
-            showStatus("Budget must be a positive number.", DANGER);
+        String error = ValidationUtils.validateBudgetInput(budgetText);
+        if (error != null) {
+            showStatus(budgetStatusLabel, error, DANGER);
             return;
         }
-        manager.setBudget(Double.parseDouble(budgetText));
-        showStatus("Budget updated!", SUCCESS);
+
+        setBudgetButton.setEnabled(false);
+        try {
+            double amount = Double.parseDouble(budgetText);
+            String dbError = manager.setBudget(amount);
+            if (dbError == null) {
+                budgetField.setText(String.format("%.2f", amount));
+                loadCurrentBudget();
+                showStatus(budgetStatusLabel, "Budget saved for " + getCurrentMonthLabel() + ".", SUCCESS);
+            } else {
+                showStatus(budgetStatusLabel, "Could not save budget: " + DbErrorFormatter.format(dbError), DANGER);
+            }
+        } finally {
+            setBudgetButton.setEnabled(true);
+        }
     }
 
     /** Resets description and amount; keeps date set to today. */
@@ -343,8 +467,31 @@ public class AddExpensePanel extends JPanel {
         dateField.setText(DateUtils.todayAsInputString());
     }
 
-    private void showStatus(String message, Color color) {
-        statusLabel.setForeground(color);
-        statusLabel.setText(message);
+    private void clearStatus(JLabel label) {
+        Timer timer = (Timer) label.getClientProperty("statusTimer");
+        if (timer != null) {
+            timer.stop();
+        }
+        label.setText(" ");
+        label.setForeground(LABEL_CLR);
+    }
+
+    private void showStatus(JLabel label, String message, Color color) {
+        clearStatus(label);
+        label.setForeground(color);
+        label.setText(message);
+
+        Timer timer = new Timer(5000, e -> {
+            label.setText(" ");
+            label.setForeground(LABEL_CLR);
+        });
+        timer.setRepeats(false);
+        label.putClientProperty("statusTimer", timer);
+        timer.start();
+    }
+
+    private String getCurrentMonthLabel() {
+        LocalDate now = LocalDate.now();
+        return now.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + now.getYear();
     }
 }

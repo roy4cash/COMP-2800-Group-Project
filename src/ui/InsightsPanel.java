@@ -2,6 +2,8 @@ package ui;
 
 import observer.ExpenseManager;
 import observer.Observer;
+import util.DbErrorFormatter;
+import util.UITheme;
 
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
@@ -11,11 +13,14 @@ import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.CategoryPlot;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.renderer.category.BarRenderer;
+import org.jfree.chart.renderer.category.StandardBarPainter;
 import org.jfree.data.category.DefaultCategoryDataset;
+import org.jfree.ui.RectangleInsets;
 
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.List;
 
@@ -27,9 +32,9 @@ import java.util.List;
  *
  * Layout (top to bottom):
  *   1. Page title
- *   2. Row of 4 stat cards: Top Category, Avg Daily Spend, Total This Month, Transactions
- *   3. Bar chart of top 5 spending categories (JFreeChart)
- *   4. Personalized financial tips section
+     *   2. Two rows of stat cards for current-month metrics
+     *   3. Bar chart of top 5 spending categories (JFreeChart)
+     *   4. Personalized financial tips section
  */
 public class InsightsPanel extends JPanel implements Observer {
 
@@ -78,42 +83,56 @@ public class InsightsPanel extends JPanel implements Observer {
 
     private void buildUI() {
         // Outer scroll pane so nothing gets clipped on small windows
-        JPanel content = new JPanel();
+        JPanel content = new JPanel(new GridBagLayout());
         content.setBackground(BG);
-        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-        content.setBorder(new EmptyBorder(20, 20, 20, 20));
+        content.setBorder(new EmptyBorder(20, 20, 24, 20));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.NORTHWEST;
 
         // 1. Page title
-        content.add(buildTitle());
-        content.add(Box.createVerticalStrut(16));
+        gbc.gridy = 0;
+        gbc.insets = new Insets(0, 0, 0, 0);
+        content.add(buildHeader(), gbc);
 
-        // 2. Stat cards row (mutable — kept as field for refresh)
-        statsRow = new JPanel(new GridLayout(1, 4, 16, 0));
-        statsRow.setBackground(BG);
-        statsRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 110));
+        // 2. Stat cards section (mutable — kept as field for refresh)
+        statsRow = new JPanel();
+        statsRow.setOpaque(false);
+        statsRow.setLayout(new BoxLayout(statsRow, BoxLayout.Y_AXIS));
+        statsRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         populateStats(statsRow);
-        content.add(statsRow);
-        content.add(Box.createVerticalStrut(20));
+        gbc.gridy = 1;
+        gbc.insets = new Insets(16, 0, 0, 0);
+        content.add(statsRow, gbc);
 
         // 3. Bar chart (mutable — kept as field for refresh)
         chartHolder = new JPanel(new BorderLayout());
-        chartHolder.setBackground(BG);
-        chartHolder.setMaximumSize(new Dimension(Integer.MAX_VALUE, 340));
-        chartHolder.setPreferredSize(new Dimension(800, 340));
+        chartHolder.setOpaque(false);
+        chartHolder.setPreferredSize(new Dimension(0, 340));
         populateChart(chartHolder);
-        content.add(chartHolder);
-        content.add(Box.createVerticalStrut(20));
+        gbc.gridy = 2;
+        gbc.insets = new Insets(20, 0, 0, 0);
+        content.add(chartHolder, gbc);
 
         // 4. Tips section (mutable — kept as field for refresh)
         tipsPanel = new JPanel();
-        tipsPanel.setBackground(BG);
-        tipsPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 180));
+        tipsPanel.setOpaque(false);
         populateTips(tipsPanel);
-        content.add(tipsPanel);
+        gbc.gridy = 3;
+        content.add(tipsPanel, gbc);
+
+        JPanel bottomSpacer = new JPanel();
+        bottomSpacer.setOpaque(false);
+        gbc.gridy = 4;
+        gbc.weighty = 1.0;
+        gbc.fill = GridBagConstraints.BOTH;
+        content.add(bottomSpacer, gbc);
 
         JScrollPane scroll = new JScrollPane(content);
-        scroll.setBorder(null);
-        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        UITheme.styleScrollPane(scroll);
         add(scroll, BorderLayout.CENTER);
     }
 
@@ -121,12 +140,16 @@ public class InsightsPanel extends JPanel implements Observer {
     // Section builders
     // ----------------------------------------------------------------
 
-    private JLabel buildTitle() {
-        JLabel title = new JLabel("Spending Insights");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
-        title.setForeground(TEXT_CLR);
-        title.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return title;
+    private JPanel buildHeader() {
+        JPanel header = new JPanel();
+        header.setOpaque(false);
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+        header.setAlignmentX(Component.LEFT_ALIGNMENT);
+        header.setMaximumSize(new Dimension(Integer.MAX_VALUE, 64));
+        header.add(UITheme.pageTitle("Spending Insights"));
+        header.add(Box.createVerticalStrut(4));
+        header.add(UITheme.pageSubtitle("Current-month trends, category breakdown, and simple spending guidance."));
+        return header;
     }
 
     // ---- Stat cards ----
@@ -135,67 +158,88 @@ public class InsightsPanel extends JPanel implements Observer {
     private void populateStats(JPanel row) {
         row.removeAll();
 
+        JPanel topRow = buildStatsGridRow();
+        JPanel bottomRow = buildStatsGridRow();
+
+        List<model.Expense> currentMonthExpenses = manager.getCurrentMonthExpenses();
         String topCat   = manager.getTopCategory();
         double avgDaily = manager.getAverageDailySpend();
         double total    = manager.getTotalSpentThisMonth();
         int    count    = manager.getExpenseCount();
+        double avgTransaction = count == 0 ? 0 : total / count;
+        double projected = getProjectedMonthEndSpending(avgDaily);
+        model.Expense largestExpense = getLargestExpense(currentMonthExpenses);
+        String riskLevel = getBudgetRiskLevel(projected, total);
+        Color riskColor = getBudgetRiskColor(riskLevel);
 
-        row.add(buildStatCard("Top Category",     topCat,
-                              String.format("%.0f%% of spending", topCategoryPercent(topCat, total)),
-                              PRIMARY));
-        row.add(buildStatCard("Avg Daily Spend",  String.format("$%.2f", avgDaily),
-                              "per day this month", SUCCESS));
-        row.add(buildStatCard("Total This Month", String.format("$%.2f", total),
-                              "spent so far", WARNING));
-        row.add(buildStatCard("Transactions",     String.valueOf(count),
-                              "expense records", new Color(139, 92, 246)));
+        if (hasAnalyticsLoadIssue()) {
+            topRow.add(UITheme.statCard("Top Category", createStatValue("Unavailable"),
+                "Database connection required", PRIMARY));
+            topRow.add(UITheme.statCard("Avg Daily Spend", createStatValue("Unavailable"),
+                "Database connection required", SUCCESS));
+            topRow.add(UITheme.statCard("Total This Month", createStatValue("Unavailable"),
+                "Database connection required", WARNING));
+            topRow.add(UITheme.statCard("Transactions", createStatValue("Unavailable"),
+                "Database connection required", new Color(139, 92, 246)));
+            bottomRow.add(UITheme.statCard("Avg Transaction", createStatValue("Unavailable"),
+                "Database connection required", PRIMARY));
+            bottomRow.add(UITheme.statCard("Largest Expense", createStatValue("Unavailable"),
+                "Database connection required", DANGER));
+            bottomRow.add(UITheme.statCard("Projected Month-End", createStatValue("Unavailable"),
+                "Database connection required", new Color(14, 165, 233)));
+            bottomRow.add(UITheme.statCard("Budget Risk", createStatValue("Unavailable"),
+                "Database connection required", WARNING));
+            row.add(topRow);
+            row.add(Box.createVerticalStrut(16));
+            row.add(bottomRow);
+            return;
+        }
+
+        topRow.add(UITheme.statCard("Top Category", createStatValue(topCat),
+            String.format("%.0f%% share of monthly spend", topCategoryPercent(topCat, total)), PRIMARY));
+        topRow.add(UITheme.statCard("Avg Daily Spend", createStatValue(String.format("$%.2f", avgDaily)),
+            "average per day this month", SUCCESS));
+        topRow.add(UITheme.statCard("Total This Month", createStatValue(String.format("$%.2f", total)),
+            "current-month spending", WARNING));
+        topRow.add(UITheme.statCard("Transactions", createStatValue(String.valueOf(count)),
+            count == 1 ? "expense recorded" : "expense records", new Color(139, 92, 246)));
+
+        bottomRow.add(UITheme.statCard("Avg Transaction", createStatValue(String.format("$%.2f", avgTransaction)),
+            count == 0 ? "No current-month transactions" : "average transaction size", PRIMARY));
+
+        JLabel largestLabel = createStatValue(largestExpense == null ? "None" : String.format("$%.2f", largestExpense.getAmount()));
+        if (largestExpense != null) {
+            largestLabel.setForeground(DANGER);
+        }
+        bottomRow.add(UITheme.statCard("Largest Expense", largestLabel,
+            largestExpense == null ? "No current-month expense yet" : largestExpense.getCategoryName() + " | " + largestExpense.getDate(),
+            DANGER));
+
+        bottomRow.add(UITheme.statCard("Projected Month-End", createStatValue(String.format("$%.2f", projected)),
+            "based on current daily pace", new Color(14, 165, 233)));
+
+        JLabel riskLabel = createStatValue(riskLevel);
+        riskLabel.setForeground(riskColor);
+        bottomRow.add(UITheme.statCard("Budget Risk", riskLabel,
+            getBudgetRiskSubtext(projected, total), riskColor));
+
+        row.add(topRow);
+        row.add(Box.createVerticalStrut(16));
+        row.add(bottomRow);
     }
 
-    /**
-     * Builds a single stat card with a large value, a label above, and a subtext below.
-     *
-     * @param label    small label at the top
-     * @param value    large center text
-     * @param subtext  small text at the bottom
-     * @param accent   left-border accent color
-     */
-    private JPanel buildStatCard(String label, String value, String subtext, Color accent) {
-        JPanel card = new JPanel(new GridBagLayout());
-        card.setBackground(CARD_BG);
-        card.setBorder(BorderFactory.createCompoundBorder(
-            new LineBorder(BORDER_CLR, 1, true),
-            new EmptyBorder(14, 16, 14, 16)));
+    private JLabel createStatValue(String text) {
+        JLabel label = new JLabel(text);
+        label.setForeground(TEXT_CLR);
+        return label;
+    }
 
-        // Colored left accent bar
-        card.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
-            BorderFactory.createCompoundBorder(
-                new LineBorder(BORDER_CLR, 1, false),
-                new EmptyBorder(12, 14, 12, 14))));
-
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1;
-
-        JLabel lbl = new JLabel(label);
-        lbl.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        lbl.setForeground(LABEL_CLR);
-        gbc.gridy = 0;
-        card.add(lbl, gbc);
-
-        JLabel val = new JLabel(value);
-        val.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        val.setForeground(TEXT_CLR);
-        gbc.gridy = 1;
-        gbc.insets = new Insets(4, 0, 4, 0);
-        card.add(val, gbc);
-
-        JLabel sub = new JLabel(subtext);
-        sub.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        sub.setForeground(LABEL_CLR);
-        gbc.gridy = 2; gbc.insets = new Insets(0, 0, 0, 0);
-        card.add(sub, gbc);
-
-        return card;
+    private JPanel buildStatsGridRow() {
+        JPanel panel = new JPanel(new GridLayout(1, 4, 16, 0));
+        panel.setOpaque(false);
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 110));
+        return panel;
     }
 
     // ---- Bar chart ----
@@ -210,7 +254,12 @@ public class InsightsPanel extends JPanel implements Observer {
         JPanel wrapper = createSectionCard("Top 5 Categories This Month");
         wrapper.setLayout(new BorderLayout());
 
-        if (spending.isEmpty()) {
+        if (hasAnalyticsLoadIssue()) {
+            JLabel empty = new JLabel(DbErrorFormatter.format(getAnalyticsError()), SwingConstants.CENTER);
+            empty.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+            empty.setForeground(LABEL_CLR);
+            wrapper.add(empty, BorderLayout.CENTER);
+        } else if (spending.isEmpty()) {
             JLabel empty = new JLabel("No spending data for this month yet.", SwingConstants.CENTER);
             empty.setFont(new Font("Segoe UI", Font.PLAIN, 13));
             empty.setForeground(LABEL_CLR);
@@ -225,10 +274,10 @@ public class InsightsPanel extends JPanel implements Observer {
 
             JFreeChart chart = ChartFactory.createBarChart(
                 null,              // chart title (we use card title)
-                "Category",        // x-axis label
+                null,              // x-axis label
                 "Amount ($)",      // y-axis label
                 dataset,
-                PlotOrientation.VERTICAL,
+                PlotOrientation.HORIZONTAL,
                 false,             // legend
                 true,              // tooltips
                 false              // URLs
@@ -240,26 +289,40 @@ public class InsightsPanel extends JPanel implements Observer {
             plot.setBackgroundPaint(CARD_BG);
             plot.setOutlineVisible(false);
             plot.setRangeGridlinePaint(BORDER_CLR);
+            plot.setDomainGridlinesVisible(false);
+            plot.setInsets(new RectangleInsets(8, 12, 8, 16));
 
             BarRenderer renderer = (BarRenderer) plot.getRenderer();
             renderer.setSeriesPaint(0, PRIMARY);
             renderer.setDrawBarOutline(false);
             renderer.setShadowVisible(false);
-            renderer.setMaximumBarWidth(0.15);
+            renderer.setBarPainter(new StandardBarPainter());
+            renderer.setMaximumBarWidth(0.18);
+            renderer.setItemMargin(0.18);
 
             CategoryAxis domainAxis = plot.getDomainAxis();
+            domainAxis.setLabel(null);
             domainAxis.setTickLabelFont(new Font("Segoe UI", Font.PLAIN, 11));
             domainAxis.setAxisLinePaint(BORDER_CLR);
+            domainAxis.setTickMarksVisible(false);
 
             NumberAxis rangeAxis = (NumberAxis) plot.getRangeAxis();
+            rangeAxis.setStandardTickUnits(NumberAxis.createStandardTickUnits());
             rangeAxis.setTickLabelFont(new Font("Segoe UI", Font.PLAIN, 11));
             rangeAxis.setNumberFormatOverride(new java.text.DecimalFormat("$#,##0.00"));
+            rangeAxis.setAxisLinePaint(BORDER_CLR);
 
             ChartPanel chartPanel = new ChartPanel(chart);
-            chartPanel.setPreferredSize(new Dimension(600, 260));
-            chartPanel.setBorder(new EmptyBorder(8, 8, 8, 8));
+            chartPanel.setPreferredSize(new Dimension(600, 280));
+            chartPanel.setBorder(new EmptyBorder(8, 12, 2, 12));
             chartPanel.setBackground(CARD_BG);
             wrapper.add(chartPanel, BorderLayout.CENTER);
+
+            JLabel footnote = new JLabel("Showing up to 5 categories for the current month.");
+            footnote.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            footnote.setForeground(LABEL_CLR);
+            footnote.setBorder(new EmptyBorder(0, 16, 12, 16));
+            wrapper.add(footnote, BorderLayout.SOUTH);
         }
 
         holder.add(wrapper, BorderLayout.CENTER);
@@ -276,12 +339,18 @@ public class InsightsPanel extends JPanel implements Observer {
         wrapper.setLayout(new BoxLayout(wrapper, BoxLayout.Y_AXIS));
 
         List<String> tips = generateTips();
-        for (String tip : tips) {
-            JLabel tipLabel = new JLabel("<html><div style='width:700px'>\u2022 " + tip + "</div></html>");
+        for (int i = 0; i < tips.size(); i++) {
+            JPanel tipRow = new JPanel(new BorderLayout());
+            tipRow.setOpaque(true);
+            tipRow.setBackground(i % 2 == 0 ? CARD_BG : new Color(248, 250, 252));
+            tipRow.setBorder(BorderFactory.createCompoundBorder(
+                i < tips.size() - 1 ? new MatteBorder(0, 0, 1, 0, BORDER_CLR) : new EmptyBorder(0, 0, 0, 0),
+                new EmptyBorder(10, 14, 10, 14)));
+            JLabel tipLabel = new JLabel("<html><div style='width:720px'><b>Tip " + (i + 1) + ":</b> " + tips.get(i) + "</div></html>");
             tipLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
             tipLabel.setForeground(TEXT_CLR);
-            tipLabel.setBorder(new EmptyBorder(6, 4, 6, 4));
-            wrapper.add(tipLabel);
+            tipRow.add(tipLabel, BorderLayout.CENTER);
+            wrapper.add(tipRow);
         }
 
         panel.add(wrapper, BorderLayout.CENTER);
@@ -331,38 +400,142 @@ public class InsightsPanel extends JPanel implements Observer {
      */
     private List<String> generateTips() {
         List<String> tips = new ArrayList<>();
+        if (hasAnalyticsLoadIssue()) {
+            tips.add(DbErrorFormatter.format(getAnalyticsError()));
+            tips.add("Once MySQL is connected, this page will show current-month trends and category insights.");
+            return tips;
+        }
 
+        List<model.Expense> currentMonthExpenses = manager.getCurrentMonthExpenses();
         double total  = manager.getTotalSpentThisMonth();
         String topCat = manager.getTopCategory();
         double avg    = manager.getAverageDailySpend();
+        int count     = manager.getExpenseCount();
+        double projected = getProjectedMonthEndSpending(avg);
+        model.Expense largestExpense = getLargestExpense(currentMonthExpenses);
+        String riskLevel = getBudgetRiskLevel(projected, total);
+        double averageTransaction = count == 0 ? 0 : total / count;
 
-        // Tip 1: based on top category
         if (!"None".equals(topCat)) {
             tips.add("Your highest spending category this month is <b>" + topCat +
-                     "</b>. Consider reviewing those transactions to find savings.");
+                     "</b>. It currently accounts for <b>" +
+                     String.format("%.0f%%</b> of your monthly spend.", topCategoryPercent(topCat, total)));
         } else {
             tips.add("Start tracking your expenses to unlock personalized insights " +
                      "about where your money is going.");
         }
 
-        // Tip 2: based on average daily spend
+        if (count > 0) {
+            tips.add(String.format(
+                "Your average transaction size is <b>$%.2f</b> across <b>%d</b> current-month transactions.",
+                averageTransaction, count
+            ));
+        }
+
         if (avg > 0) {
-            double projected = avg * 30;
             tips.add(String.format(
                 "At your current daily spend of <b>$%.2f</b>, you are on track to spend " +
                 "<b>$%.2f</b> this month. Budget ahead to avoid surprises.", avg, projected));
         }
 
-        // Tip 3: general saving tip
-        if (total > 500) {
-            tips.add("You have spent over $500 this month. Consider the 50/30/20 rule: " +
-                     "50% needs, 30% wants, 20% savings.");
-        } else {
-            tips.add("Great job keeping spending low! Consider putting unspent budget " +
-                     "into an emergency fund or investment.");
+        if (largestExpense != null) {
+            tips.add(String.format(
+                "Your largest expense this month was <b>$%.2f</b> on <b>%s</b> (%s).",
+                largestExpense.getAmount(),
+                largestExpense.getDate(),
+                largestExpense.getCategoryName()
+            ));
         }
 
+        tips.add(getBudgetRiskMessage(riskLevel, projected, total));
+
         return tips;
+    }
+
+    private double getProjectedMonthEndSpending(double averageDailySpend) {
+        LocalDate now = LocalDate.now();
+        return averageDailySpend * now.lengthOfMonth();
+    }
+
+    private model.Expense getLargestExpense(List<model.Expense> expenses) {
+        model.Expense largest = null;
+        for (model.Expense expense : expenses) {
+            if (largest == null || expense.getAmount() > largest.getAmount()) {
+                largest = expense;
+            }
+        }
+        return largest;
+    }
+
+    private String getBudgetRiskLevel(double projected, double total) {
+        double budget = manager.getCurrentBudget().getAmount();
+        if (budget <= 0) {
+            return "No Budget";
+        }
+        if (total >= budget) {
+            return "Over Budget";
+        }
+        if (projected >= budget) {
+            return "High Risk";
+        }
+        if (projected >= budget * 0.9) {
+            return "Watch";
+        }
+        return "On Track";
+    }
+
+    private String getBudgetRiskSubtext(double projected, double total) {
+        double budget = manager.getCurrentBudget().getAmount();
+        if (budget <= 0) {
+            return "Set a monthly budget to unlock risk tracking";
+        }
+        return String.format("Projected $%.2f vs budget $%.2f", projected, budget);
+    }
+
+    private String getBudgetRiskMessage(String riskLevel, double projected, double total) {
+        double budget = manager.getCurrentBudget().getAmount();
+        if (budget <= 0) {
+            return "Set a monthly budget to compare your current pace against a spending target.";
+        }
+        if ("Over Budget".equals(riskLevel)) {
+            return String.format("You are already over budget. Spending is <b>$%.2f</b> against a budget of <b>$%.2f</b>.", total, budget);
+        }
+        if ("High Risk".equals(riskLevel)) {
+            return String.format("Your current pace puts you at <b>$%.2f</b> by month-end, which is above your <b>$%.2f</b> budget.", projected, budget);
+        }
+        if ("Watch".equals(riskLevel)) {
+            return String.format("You are close to your spending limit. Projected month-end spend is <b>$%.2f</b> versus a budget of <b>$%.2f</b>.", projected, budget);
+        }
+        return String.format("You are currently on track to stay below budget. Projected month-end spend is <b>$%.2f</b> versus a budget of <b>$%.2f</b>.", projected, budget);
+    }
+
+    private Color getBudgetRiskColor(String riskLevel) {
+        if ("Over Budget".equals(riskLevel)) {
+            return DANGER;
+        }
+        if ("High Risk".equals(riskLevel) || "Watch".equals(riskLevel)) {
+            return WARNING;
+        }
+        if ("No Budget".equals(riskLevel)) {
+            return LABEL_CLR;
+        }
+        return SUCCESS;
+    }
+
+    private boolean hasAnalyticsLoadIssue() {
+        return getAnalyticsError() != null;
+    }
+
+    private String getAnalyticsError() {
+        String expenseError = manager.getLastExpenseLoadError();
+        if (expenseError != null && !expenseError.trim().isEmpty()) {
+            return expenseError;
+        }
+        String aggregateError = manager.getLastAggregateLoadError();
+        if (aggregateError != null && !aggregateError.trim().isEmpty()) {
+            return aggregateError;
+        }
+        return null;
     }
 
     // ----------------------------------------------------------------

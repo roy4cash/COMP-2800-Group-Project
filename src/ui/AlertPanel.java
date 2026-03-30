@@ -3,6 +3,7 @@ package ui;
 import model.Budget;
 import observer.ExpenseManager;
 import observer.Observer;
+import util.DbErrorFormatter;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -73,6 +74,18 @@ public class AlertPanel extends JPanel implements Observer {
         Budget budget = manager.getCurrentBudget();
         double spent  = manager.getTotalSpentThisMonth();
         JPanel banner = (JPanel) getClientProperty("banner");
+        String budgetError = manager.getLastBudgetLoadError();
+        String aggregateError = manager.getLastAggregateLoadError();
+
+        if ((budgetError != null && !budgetError.trim().isEmpty())
+                || (aggregateError != null && !aggregateError.trim().isEmpty())) {
+            style(banner, NONE_BG, NONE_FG, "i",
+                  "Budget data is unavailable.",
+                  DbErrorFormatter.format(
+                      budgetError != null && !budgetError.trim().isEmpty() ? budgetError : aggregateError
+                  ));
+            return;
+        }
 
         if (budget.getAmount() <= 0) {
             style(banner, NONE_BG, NONE_FG, "ℹ", "No budget set for this month.",

@@ -4,6 +4,7 @@ import model.Budget;
 import observer.ExpenseManager;
 import observer.Observer;
 
+import util.DbErrorFormatter;
 import util.UITheme;
 
 import javax.swing.*;
@@ -97,18 +98,39 @@ public class SummaryPanel extends JPanel implements Observer {
     public void update() {
         Budget budget    = manager.getCurrentBudget();
         double spent     = manager.getTotalSpentThisMonth();
+        String budgetError = manager.getLastBudgetLoadError();
+        String aggregateError = manager.getLastAggregateLoadError();
+
+        if ((budgetError != null && !budgetError.trim().isEmpty())
+                || (aggregateError != null && !aggregateError.trim().isEmpty())) {
+            budgetValue.setText("Unavailable");
+            spentValue.setText("Unavailable");
+            remainingValue.setText("Unavailable");
+            budgetValue.setForeground(WARNING);
+            spentValue.setForeground(WARNING);
+            remainingValue.setForeground(WARNING);
+            progressBar.setValue(0);
+            progressBar.setForeground(WARNING);
+            progressLabel.setText(DbErrorFormatter.format(
+                budgetError != null && !budgetError.trim().isEmpty() ? budgetError : aggregateError
+            ));
+            return;
+        }
+
         double budgetAmt = budget.getAmount();
         double remaining = budgetAmt - spent;
+        double percentUsed = budgetAmt > 0 ? (spent / budgetAmt) * 100.0 : 0.0;
+        int progressValue = budgetAmt > 0 ? (int) Math.min(percentUsed, 100.0) : 0;
 
         budgetValue.setText(String.format("$%.2f", budgetAmt));
         spentValue.setText( String.format("$%.2f", spent));
-        remainingValue.setText(String.format("$%.2f", Math.abs(remaining)));
+        remainingValue.setText(String.format("$%.2f", remaining));
 
         // Colour remaining based on status
         if (remaining < 0) {
             remainingValue.setForeground(DANGER);
             progressBar.setForeground(DANGER);
-        } else if (budgetAmt > 0 && spent / budgetAmt >= 0.8) {
+        } else if (budgetAmt > 0 && percentUsed >= 80.0) {
             remainingValue.setForeground(WARNING);
             progressBar.setForeground(WARNING);
         } else {
@@ -116,9 +138,24 @@ public class SummaryPanel extends JPanel implements Observer {
             progressBar.setForeground(SUCCESS);
         }
 
-        // Progress bar
-        int pct = budgetAmt > 0 ? (int) Math.min((spent / budgetAmt) * 100, 100) : 0;
-        progressBar.setValue(pct);
-        progressLabel.setText(pct + "% of budget used");
+        progressBar.setValue(progressValue);
+        if (budgetAmt <= 0) {
+            progressLabel.setText("Set a monthly budget to track progress");
+        } else if (remaining < 0) {
+            progressLabel.setText(String.format(
+                "%.0f%% used | %s over budget | %s spent of %s",
+                percentUsed,
+                String.format("$%.2f", Math.abs(remaining)),
+                String.format("$%.2f", spent),
+                String.format("$%.2f", budgetAmt)
+            ));
+        } else {
+            progressLabel.setText(String.format(
+                "%.0f%% used | %s spent of %s",
+                percentUsed,
+                String.format("$%.2f", spent),
+                String.format("$%.2f", budgetAmt)
+            ));
+        }
     }
 }

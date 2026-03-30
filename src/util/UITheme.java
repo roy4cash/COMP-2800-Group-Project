@@ -2,6 +2,7 @@ package util;
 
 import javax.swing.*;
 import javax.swing.border.*;
+import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.*;
 import java.awt.event.*;
 
@@ -57,6 +58,7 @@ public final class UITheme {
     // ----------------------------------------------------------------
 
     public static final Font FONT_PAGE_TITLE = new Font("Segoe UI", Font.BOLD,  22);
+    public static final Font FONT_PAGE_SUB   = new Font("Segoe UI", Font.PLAIN, 12);
     public static final Font FONT_CARD_TITLE = new Font("Segoe UI", Font.BOLD,  14);
     public static final Font FONT_SECTION    = new Font("Segoe UI", Font.BOLD,  13);
     public static final Font FONT_LABEL      = new Font("Segoe UI", Font.BOLD,  11);
@@ -268,8 +270,64 @@ public final class UITheme {
         return l;
     }
 
+    /** Creates a muted subtitle label for page headers and helper text. */
+    public static JLabel pageSubtitle(String text) {
+        JLabel l = new JLabel(text);
+        l.setFont(FONT_PAGE_SUB);
+        l.setForeground(LABEL);
+        l.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return l;
+    }
+
+    /** Applies the standard rounded field look to combo boxes. */
+    public static void styleComboBox(JComboBox<?> combo) {
+        combo.setFont(FONT_BODY);
+        combo.setForeground(TEXT);
+        combo.setBackground(new Color(248, 250, 252));
+        combo.setBorder(new LineBorder(BORDER, 1, true));
+        combo.setFocusable(false);
+    }
+
+    /** Standard scroll pane styling used across the app. */
+    public static void styleScrollPane(JScrollPane scroll) {
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(BG);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.getHorizontalScrollBar().setUnitIncrement(16);
+        scroll.getVerticalScrollBar().setOpaque(false);
+        scroll.getHorizontalScrollBar().setOpaque(false);
+        scroll.getVerticalScrollBar().setUI(new AppScrollBarUI());
+        scroll.getHorizontalScrollBar().setUI(new AppScrollBarUI());
+    }
+
     /** Rigid vertical spacer (for BoxLayout). */
     public static Component vGap(int px) {
         return Box.createVerticalStrut(px);
+    }
+
+    private static final class AppScrollBarUI extends BasicScrollBarUI {
+        @Override
+        protected void configureScrollBarColors() {
+            thumbColor = new Color(191, 219, 254);
+            trackColor = BG;
+        }
+
+        @Override
+        protected JButton createDecreaseButton(int orientation) {
+            return createZeroButton();
+        }
+
+        @Override
+        protected JButton createIncreaseButton(int orientation) {
+            return createZeroButton();
+        }
+
+        private JButton createZeroButton() {
+            JButton button = new JButton();
+            button.setPreferredSize(new Dimension(0, 0));
+            button.setMinimumSize(new Dimension(0, 0));
+            button.setMaximumSize(new Dimension(0, 0));
+            return button;
+        }
     }
 }

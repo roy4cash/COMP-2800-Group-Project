@@ -2,6 +2,7 @@ package ui;
 
 import observer.ExpenseManager;
 import observer.Observer;
+import util.DbErrorFormatter;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.PiePlot;
@@ -47,6 +48,7 @@ public class ChartPanel extends JPanel implements Observer {
         removeAll();
 
         Map<String, Double> spending = manager.getSpendingByCategory();
+        String loadError = manager.getLastAggregateLoadError();
 
         JPanel card = new JPanel(new BorderLayout());
         card.setBackground(CARD_BG);
@@ -65,7 +67,12 @@ public class ChartPanel extends JPanel implements Observer {
         titleLabel.setPreferredSize(new Dimension(0, 46));
         card.add(titleLabel, BorderLayout.NORTH);
 
-        if (spending.isEmpty()) {
+        if (loadError != null && !loadError.trim().isEmpty()) {
+            JLabel empty = new JLabel(DbErrorFormatter.format(loadError), SwingConstants.CENTER);
+            empty.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            empty.setForeground(MUTED);
+            card.add(empty, BorderLayout.CENTER);
+        } else if (spending.isEmpty()) {
             JLabel empty = new JLabel("No expenses recorded this month", SwingConstants.CENTER);
             empty.setFont(new Font("Segoe UI", Font.PLAIN, 14));
             empty.setForeground(MUTED);

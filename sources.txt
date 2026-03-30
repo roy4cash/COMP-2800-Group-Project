@@ -1,21 +1,30 @@
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\app\Main.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\db\BudgetDAO.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\db\CategoryDAO.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\db\DBConnection.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\db\ExpenseDAO.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\model\Budget.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\model\Category.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\model\Expense.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\model\User.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\observer\ExpenseManager.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\observer\Observer.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\observer\Subject.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\ui\AddExpensePanel.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\ui\AlertPanel.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\ui\ChartPanel.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\ui\DashboardPanel.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\ui\ExpenseTablePanel.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\ui\MainFrame.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\ui\SummaryPanel.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\util\DateUtils.java
-C:\Users\ayush\OneDrive\Desktop\Comp2800\comp 2800\FAT\src\util\ValidationUtils.java
+src\app\Main.java
+src\db\BudgetDAO.java
+src\db\CategoryDAO.java
+src\db\DBConnection.java
+src\db\ExpenseDAO.java
+src\db\InvestmentDAO.java
+src\model\Budget.java
+src\model\Category.java
+src\model\Expense.java
+src\model\Investment.java
+src\model\User.java
+src\observer\ExpenseManager.java
+src\observer\Observer.java
+src\observer\Subject.java
+src\ui\AddExpensePanel.java
+src\ui\AlertPanel.java
+src\ui\ChartPanel.java
+src\ui\DashboardPanel.java
+src\ui\ExpenseTablePanel.java
+src\ui\InsightsPanel.java
+src\ui\InvestmentPanel.java
+src\ui\MainFrame.java
+src\ui\RecentTransactionsPanel.java
+src\ui\SummaryPanel.java
+src\ui\TopCategoriesPanel.java
+src\util\DateUtils.java
+src\util\DbErrorFormatter.java
+src\util\PlaceholderTextField.java
+src\util\UITheme.java
+src\util\ValidationUtils.java

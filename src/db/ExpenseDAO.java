@@ -11,12 +11,16 @@ import java.util.*;
  */
 public class ExpenseDAO {
 
+    private String lastLoadErrorMessage;
+    private String lastAggregateErrorMessage;
+
     /**
      * Returns all expenses for the given user, newest first.
      * The category name is fetched with a JOIN so the UI does not need a separate lookup.
      */
     public List<Expense> getAllExpenses(int userId) {
         List<Expense> expenses = new ArrayList<>();
+        lastLoadErrorMessage = null;
         String sql =
             "SELECT e.id, e.user_id, e.category_id, c.name AS category_name, " +
             "       e.description, e.amount, e.expense_date " +
@@ -45,6 +49,7 @@ public class ExpenseDAO {
 
         } catch (SQLException e) {
             System.err.println("ExpenseDAO.getAllExpenses: " + e.getMessage());
+            lastLoadErrorMessage = e.getMessage();
         }
 
         return expenses;
@@ -77,42 +82,83 @@ public class ExpenseDAO {
         }
     }
 
-    /** Deletes the expense with the given ID. */
-    public void deleteExpense(int expenseId) {
+    /** Deletes the expense with the given ID. Returns null on success. */
+    public String deleteExpense(int expenseId) {
         String sql = "DELETE FROM expenses WHERE id = ?";
 
         try (Connection       conn = DBConnection.getConnection();
              PreparedStatement ps   = conn.prepareStatement(sql)) {
 
             ps.setInt(1, expenseId);
-            ps.executeUpdate();
+            int deleted = ps.executeUpdate();
+            if (deleted == 0) {
+                return "Expense not found. It may have already been removed.";
+            }
+            return null;
 
         } catch (SQLException e) {
             System.err.println("ExpenseDAO.deleteExpense: " + e.getMessage());
+            return e.getMessage();
         }
+    }
+
+    /** Last error encountered while loading the transactions list, or null if the last load succeeded. */
+    public String getLastLoadErrorMessage() {
+        return lastLoadErrorMessage;
     }
 
     /** Returns the total amount spent by the user in the given month/year. */
     public double getTotalForMonth(int userId, int month, int year) {
+        lastAggregateErrorMessage = null;
+        LocalDate startDate = LocalDate.of(year, month, 1);
+        LocalDate endDate = startDate.plusMonths(1);
         String sql =
             "SELECT COALESCE(SUM(amount), 0) " +
             "FROM   expenses " +
-            "WHERE  user_id = ? AND EXTRACT(MONTH FROM expense_date) = ? AND EXTRACT(YEAR FROM expense_date) = ?";
+            "WHERE  user_id = ? AND expense_date >= ? AND expense_date < ?";
 
         try (Connection       conn = DBConnection.getConnection();
              PreparedStatement ps   = conn.prepareStatement(sql)) {
 
             ps.setInt(1, userId);
-            ps.setInt(2, month);
-            ps.setInt(3, year);
+            ps.setDate(2, java.sql.Date.valueOf(startDate));
+            ps.setDate(3, java.sql.Date.valueOf(endDate));
             ResultSet rs = ps.executeQuery();
             if (rs.next()) return rs.getDouble(1);
 
         } catch (SQLException e) {
             System.err.println("ExpenseDAO.getTotalForMonth: " + e.getMessage());
+            lastAggregateErrorMessage = e.getMessage();
         }
 
         return 0.0;
+    }
+
+    /** Returns the number of expenses recorded in the given month/year. */
+    public int getExpenseCountForMonth(int userId, int month, int year) {
+        lastAggregateErrorMessage = null;
+        LocalDate startDate = LocalDate.of(year, month, 1);
+        LocalDate endDate = startDate.plusMonths(1);
+        String sql =
+            "SELECT COUNT(*) " +
+            "FROM   expenses " +
+            "WHERE  user_id = ? AND expense_date >= ? AND expense_date < ?";
+
+        try (Connection       conn = DBConnection.getConnection();
+             PreparedStatement ps   = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, userId);
+            ps.setDate(2, java.sql.Date.valueOf(startDate));
+            ps.setDate(3, java.sql.Date.valueOf(endDate));
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) return rs.getInt(1);
+
+        } catch (SQLException e) {
+            System.err.println("ExpenseDAO.getExpenseCountForMonth: " + e.getMessage());
+            lastAggregateErrorMessage = e.getMessage();
+        }
+
+        return 0;
     }
 
     /**
@@ -121,11 +167,14 @@ public class ExpenseDAO {
      */
     public Map<String, Double> getSpendingByCategory(int userId, int month, int year) {
         Map<String, Double> result = new LinkedHashMap<>();
+        lastAggregateErrorMessage = null;
+        LocalDate startDate = LocalDate.of(year, month, 1);
+        LocalDate endDate = startDate.plusMonths(1);
         String sql =
             "SELECT c.name, SUM(e.amount) AS total " +
             "FROM   expenses e " +
             "JOIN   categories c ON e.category_id = c.id " +
-            "WHERE  e.user_id = ? AND EXTRACT(MONTH FROM e.expense_date) = ? AND EXTRACT(YEAR FROM e.expense_date) = ? " +
+            "WHERE  e.user_id = ? AND e.expense_date >= ? AND e.expense_date < ? " +
             "GROUP BY c.name " +
             "ORDER BY total DESC";
 
@@ -133,8 +182,8 @@ public class ExpenseDAO {
              PreparedStatement ps   = conn.prepareStatement(sql)) {
 
             ps.setInt(1, userId);
-            ps.setInt(2, month);
-            ps.setInt(3, year);
+            ps.setDate(2, java.sql.Date.valueOf(startDate));
+            ps.setDate(3, java.sql.Date.valueOf(endDate));
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
@@ -143,8 +192,14 @@ public class ExpenseDAO {
 
         } catch (SQLException e) {
             System.err.println("ExpenseDAO.getSpendingByCategory: " + e.getMessage());
+            lastAggregateErrorMessage = e.getMessage();
         }
 
         return result;
+    }
+
+    /** Last error encountered while loading monthly totals/counts/charts, or null if the last load succeeded. */
+    public String getLastAggregateErrorMessage() {
+        return lastAggregateErrorMessage;
     }
 }

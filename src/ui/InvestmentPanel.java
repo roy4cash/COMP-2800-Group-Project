@@ -3,12 +3,17 @@ package ui;
 import db.InvestmentDAO;
 import model.Investment;
 import util.DateUtils;
+import util.DbErrorFormatter;
 import util.PlaceholderTextField;
 import util.UITheme;
+import util.ValidationUtils;
 
 import javax.swing.*;
 import javax.swing.border.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.*;
+import javax.swing.text.JTextComponent;
 import java.awt.*;
 import java.util.List;
 
@@ -20,7 +25,7 @@ import java.util.List;
  *
  * Layout (top to bottom):
  *   1. Page title + Refresh button
- *   2. Three portfolio stat cards: Total Invested, Current Value, Total Gain/Loss
+ *   2. Portfolio summary cards: totals, holdings count, and best/worst performer
  *   3. "Add Investment" form (Name, Ticker, Type, Shares, Buy Price, Current Price, Date)
  *   4. Scrollable table of all investments with a Delete action column
  *
@@ -41,12 +46,11 @@ public class InvestmentPanel extends JPanel {
 
     private static final Font LABEL_FONT = new Font("Segoe UI", Font.BOLD,  12);
     private static final Font FIELD_FONT = new Font("Segoe UI", Font.PLAIN, 13);
-    private static final Font BTN_FONT   = new Font("Segoe UI", Font.BOLD,  13);
-
     // Hard-coded single user (same as rest of app)
     private static final int DEFAULT_USER_ID = 1;
 
     private final InvestmentDAO dao = new InvestmentDAO();
+    private String tableSetupError;
 
     // ---- Form fields ----
     private PlaceholderTextField nameField;
@@ -62,18 +66,29 @@ public class InvestmentPanel extends JPanel {
     private JLabel totalInvestedLabel;
     private JLabel currentValueLabel;
     private JLabel gainLossLabel;
+    private JLabel holdingsCountLabel;
+    private JLabel bestPerformerLabel;
+    private JLabel worstPerformerLabel;
+    private JButton addButton;
+    private JButton refreshButton;
+    private JLabel tableStatusLabel;
 
     // ---- Table ----
     private DefaultTableModel tableModel;
     private JTable            table;
+    private final CardLayout  tableContentLayout = new CardLayout();
+    private final JPanel      tableContentPanel  = new JPanel(tableContentLayout);
+    private JLabel            tableStateTitleLabel;
+    private JLabel            tableStateBodyLabel;
 
     public InvestmentPanel() {
         // Create the DB table on first run — IF NOT EXISTS is idempotent
-        dao.createTableIfNotExists();
+        tableSetupError = dao.createTableIfNotExists();
 
         setBackground(BG);
         setLayout(new BorderLayout());
         buildUI();
+        wireFormStatusResetters();
         loadData(); // populate table and stats on first display
     }
 
@@ -85,7 +100,7 @@ public class InvestmentPanel extends JPanel {
         JPanel content = new JPanel();
         content.setBackground(BG);
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-        content.setBorder(new EmptyBorder(20, 20, 20, 20));
+        content.setBorder(new EmptyBorder(20, 20, 24, 20));
 
         // 1. Header row: title + refresh button
         content.add(buildHeaderRow());
@@ -107,8 +122,7 @@ public class InvestmentPanel extends JPanel {
         content.add(buildTablePanel());
 
         JScrollPane scroll = new JScrollPane(content);
-        scroll.setBorder(null);
-        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        UITheme.styleScrollPane(scroll);
         add(scroll, BorderLayout.CENTER);
     }
 
@@ -117,61 +131,50 @@ public class InvestmentPanel extends JPanel {
     private JPanel buildHeaderRow() {
         JPanel row = new JPanel(new BorderLayout());
         row.setBackground(BG);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 58));
 
-        JLabel title = new JLabel("Investment Tracker");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
-        title.setForeground(TEXT_CLR);
+        JPanel textPanel = new JPanel();
+        textPanel.setOpaque(false);
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+        textPanel.add(UITheme.pageTitle("Investment Tracker"));
+        textPanel.add(Box.createVerticalStrut(4));
+        textPanel.add(UITheme.pageSubtitle("Manual portfolio tracking for stocks, ETFs, crypto, bonds, and other assets."));
 
-        JButton refresh = createButton("Refresh", new Color(100, 116, 139));
-        refresh.setPreferredSize(new Dimension(100, 34));
-        refresh.addActionListener(e -> loadData());
+        refreshButton = createButton("Refresh Portfolio", new Color(100, 116, 139));
+        refreshButton.setPreferredSize(new Dimension(156, 36));
+        refreshButton.addActionListener(e -> loadData());
 
-        row.add(title,   BorderLayout.WEST);
-        row.add(refresh, BorderLayout.EAST);
+        row.add(textPanel, BorderLayout.WEST);
+        row.add(refreshButton, BorderLayout.EAST);
         return row;
     }
 
     // ---- Stats cards ----
 
     private JPanel buildStatsRow() {
-        JPanel row = new JPanel(new GridLayout(1, 3, 16, 0));
+        JPanel row = new JPanel(new GridLayout(2, 3, 16, 16));
         row.setBackground(BG);
 
         totalInvestedLabel = new JLabel("$0.00");
         currentValueLabel  = new JLabel("$0.00");
         gainLossLabel      = new JLabel("$0.00");
+        holdingsCountLabel = new JLabel("0");
+        bestPerformerLabel = new JLabel("None");
+        worstPerformerLabel = new JLabel("None");
 
-        row.add(buildStatCard("Total Invested",  totalInvestedLabel, new Color(37,  99,  235)));
-        row.add(buildStatCard("Current Value",   currentValueLabel,  new Color(16,  185, 129)));
-        row.add(buildStatCard("Total Gain/Loss", gainLossLabel,      new Color(100, 116, 139)));
+        row.add(buildStatCard("Total Invested",  totalInvestedLabel, "cost basis", new Color(37,  99,  235)));
+        row.add(buildStatCard("Current Value",   currentValueLabel,  "market value", new Color(16,  185, 129)));
+        row.add(buildStatCard("Total Gain/Loss", gainLossLabel,      "unrealized result", new Color(100, 116, 139)));
+        row.add(buildStatCard("Holdings Count", holdingsCountLabel, "active positions", new Color(14, 165, 233)));
+        row.add(buildStatCard("Best Performer", bestPerformerLabel, "highest gain by percentage", SUCCESS));
+        row.add(buildStatCard("Worst Performer", worstPerformerLabel, "lowest gain by percentage", DANGER));
 
         return row;
     }
 
-    private JPanel buildStatCard(String label, JLabel valueLabel, Color accent) {
-        JPanel card = new JPanel(new GridBagLayout());
-        card.setBackground(CARD_BG);
-        card.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
-            BorderFactory.createCompoundBorder(
-                new LineBorder(BORDER_CLR, 1, false),
-                new EmptyBorder(12, 14, 12, 14))));
-
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1;
-
-        JLabel lbl = new JLabel(label);
-        lbl.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        lbl.setForeground(LABEL_CLR);
-        gbc.gridy = 0; card.add(lbl, gbc);
-
-        valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+    private JPanel buildStatCard(String label, JLabel valueLabel, String subtext, Color accent) {
         valueLabel.setForeground(TEXT_CLR);
-        gbc.gridy = 1; gbc.insets = new Insets(4, 0, 0, 0);
-        card.add(valueLabel, gbc);
-
-        return card;
+        return UITheme.statCard(label, valueLabel, subtext, accent);
     }
 
     // ---- Add Investment form ----
@@ -194,22 +197,31 @@ public class InvestmentPanel extends JPanel {
         gbc.weightx = 1.0;
         gbc.insets  = new Insets(4, 4, 4, 4);
 
+        JLabel helper = new JLabel(
+            "<html><div style='color:#64748B; line-height:1.45'>Enter holdings manually. " +
+            "Current prices are user-entered values and are not fetched from a live market feed.</div></html>");
+        helper.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        helper.setForeground(LABEL_CLR);
+        GridBagConstraints hc = (GridBagConstraints) gbc.clone();
+        hc.gridx = 0; hc.gridy = 0; hc.gridwidth = 3;
+        hc.insets = new Insets(0, 4, 10, 4);
+        inner.add(helper, hc);
+
         // Row 1: Name, Ticker, Type
         nameField   = new PlaceholderTextField("e.g. Apple Inc.");
         tickerField = new PlaceholderTextField("AAPL");
         typeBox = new JComboBox<>(new String[]{"Stock", "ETF", "Crypto", "Bond", "Other"});
         styleField(nameField);
         styleField(tickerField);
-        typeBox.setFont(FIELD_FONT);
-        typeBox.setBackground(new Color(248, 250, 252));
+        UITheme.styleComboBox(typeBox);
         typeBox.setPreferredSize(new Dimension(0, 38));
 
-        addFormLabel(inner, gbc, "Name",   0, 0);
-        addFormLabel(inner, gbc, "Ticker", 1, 0);
-        addFormLabel(inner, gbc, "Type",   2, 0);
-        addFormField(inner, gbc, nameField,   0, 1);
-        addFormField(inner, gbc, tickerField, 1, 1);
-        addFormField(inner, gbc, typeBox,     2, 1);
+        addFormLabel(inner, gbc, "Name",   0, 1);
+        addFormLabel(inner, gbc, "Ticker", 1, 1);
+        addFormLabel(inner, gbc, "Type",   2, 1);
+        addFormField(inner, gbc, nameField,   0, 2);
+        addFormField(inner, gbc, tickerField, 1, 2);
+        addFormField(inner, gbc, typeBox,     2, 2);
 
         // Row 2: Shares, Buy Price, Current Price, Date
         sharesField       = new PlaceholderTextField("e.g. 10");
@@ -221,39 +233,48 @@ public class InvestmentPanel extends JPanel {
         styleField(currentPriceField);
         styleField(dateField);
 
-        addFormLabel(inner, gbc, "Shares",        0, 2);
-        addFormLabel(inner, gbc, "Buy Price ($)",  1, 2);
-        addFormLabel(inner, gbc, "Current Price ($)", 2, 2);
-        addFormField(inner, gbc, sharesField,       0, 3);
-        addFormField(inner, gbc, buyPriceField,     1, 3);
-        addFormField(inner, gbc, currentPriceField, 2, 3);
+        addFormLabel(inner, gbc, "Shares",        0, 3);
+        addFormLabel(inner, gbc, "Buy Price ($)",  1, 3);
+        addFormLabel(inner, gbc, "Current Price ($)", 2, 3);
+        addFormField(inner, gbc, sharesField,       0, 4);
+        addFormField(inner, gbc, buyPriceField,     1, 4);
+        addFormField(inner, gbc, currentPriceField, 2, 4);
 
         // Date label spans col 0 of row 4
         JLabel dateLabel = new JLabel("Purchase Date (YYYY-MM-DD)");
         dateLabel.setFont(LABEL_FONT);
         dateLabel.setForeground(LABEL_CLR);
         GridBagConstraints dlc = (GridBagConstraints) gbc.clone();
-        dlc.gridx = 0; dlc.gridy = 4; dlc.gridwidth = 1;
+        dlc.gridx = 0; dlc.gridy = 5; dlc.gridwidth = 1;
         inner.add(dateLabel, dlc);
 
         GridBagConstraints dfc = (GridBagConstraints) gbc.clone();
-        dfc.gridx = 0; dfc.gridy = 5; dfc.gridwidth = 1;
+        dfc.gridx = 0; dfc.gridy = 6; dfc.gridwidth = 1;
         inner.add(dateField, dfc);
+
+        JLabel dateHint = new JLabel("Use the purchase date only. Notes are not required in this build.");
+        dateHint.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        dateHint.setForeground(LABEL_CLR);
+        GridBagConstraints dhc = (GridBagConstraints) gbc.clone();
+        dhc.gridx = 1; dhc.gridy = 6; dhc.gridwidth = 2;
+        inner.add(dateHint, dhc);
 
         // Status label
         formStatus = new JLabel(" ");
         formStatus.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        formStatus.setForeground(LABEL_CLR);
         GridBagConstraints sc = (GridBagConstraints) gbc.clone();
-        sc.gridx = 0; sc.gridy = 6; sc.gridwidth = 3;
+        sc.gridx = 0; sc.gridy = 7; sc.gridwidth = 3;
+        sc.insets = new Insets(8, 4, 4, 4);
         inner.add(formStatus, sc);
 
         // Add Investment button (spans full width)
-        JButton addBtn = createButton("+ Add Investment", PRIMARY);
-        addBtn.addActionListener(e -> handleAddInvestment());
+        addButton = createButton("+ Add Investment", PRIMARY);
+        addButton.addActionListener(e -> handleAddInvestment());
         GridBagConstraints bc = (GridBagConstraints) gbc.clone();
-        bc.gridx = 0; bc.gridy = 7; bc.gridwidth = 3;
-        bc.insets = new Insets(8, 4, 4, 4);
-        inner.add(addBtn, bc);
+        bc.gridx = 0; bc.gridy = 8; bc.gridwidth = 3;
+        bc.insets = new Insets(10, 4, 4, 4);
+        inner.add(addButton, bc);
 
         JPanel card = new JPanel(new BorderLayout());
         card.setBackground(CARD_BG);
@@ -320,14 +341,53 @@ public class InvestmentPanel extends JPanel {
 
         JScrollPane tableScroll = new JScrollPane(table);
         tableScroll.setPreferredSize(new Dimension(0, 220));
-        tableScroll.setBorder(null);
+        UITheme.styleScrollPane(tableScroll);
+
+        tableStatusLabel = new JLabel(" ");
+        tableStatusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        tableStatusLabel.setForeground(LABEL_CLR);
+        tableStatusLabel.setBorder(new EmptyBorder(8, 16, 8, 16));
+
+        tableContentPanel.setOpaque(false);
+        tableContentPanel.add(tableScroll, "table");
+        tableContentPanel.add(buildTableStatePanel(), "state");
+
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+        header.add(titleLabel, BorderLayout.NORTH);
+        header.add(tableStatusLabel, BorderLayout.SOUTH);
 
         JPanel card = new JPanel(new BorderLayout());
         card.setBackground(CARD_BG);
         card.setBorder(new LineBorder(BORDER_CLR, 1, true));
-        card.add(titleLabel,  BorderLayout.NORTH);
-        card.add(tableScroll, BorderLayout.CENTER);
+        card.add(header, BorderLayout.NORTH);
+        card.add(tableContentPanel, BorderLayout.CENTER);
         return card;
+    }
+
+    private JPanel buildTableStatePanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBackground(CARD_BG);
+        panel.setBorder(new EmptyBorder(32, 24, 32, 24));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.weightx = 1.0;
+        gbc.insets = new Insets(4, 0, 4, 0);
+
+        tableStateTitleLabel = new JLabel("No investments yet");
+        tableStateTitleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        tableStateTitleLabel.setForeground(TEXT_CLR);
+        gbc.gridy = 0;
+        panel.add(tableStateTitleLabel, gbc);
+
+        tableStateBodyLabel = new JLabel("Add your first holding to start tracking your portfolio.");
+        tableStateBodyLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        tableStateBodyLabel.setForeground(LABEL_CLR);
+        gbc.gridy = 1;
+        panel.add(tableStateBodyLabel, gbc);
+
+        return panel;
     }
 
     // ----------------------------------------------------------------
@@ -339,7 +399,18 @@ public class InvestmentPanel extends JPanel {
      * and recalculates the portfolio summary cards.
      */
     private void loadData() {
+        if (tableSetupError != null) {
+            tableSetupError = dao.createTableIfNotExists();
+        }
+        if (refreshButton != null) {
+            refreshButton.setEnabled(false);
+        }
+        if (tableStatusLabel != null) {
+            tableStatusLabel.setForeground(LABEL_CLR);
+            tableStatusLabel.setText("Refreshing portfolio...");
+        }
         List<Investment> investments = dao.getAllInvestments(DEFAULT_USER_ID);
+        String loadError = tableSetupError != null ? tableSetupError : dao.getLastLoadErrorMessage();
 
         // Rebuild table
         tableModel.setRowCount(0);
@@ -371,9 +442,35 @@ public class InvestmentPanel extends JPanel {
         double gainLoss = totalValue - totalCost;
         totalInvestedLabel.setText(String.format("$%.2f", totalCost));
         currentValueLabel.setText(String.format("$%.2f", totalValue));
-
         gainLossLabel.setText(String.format("$%.2f", gainLoss));
         gainLossLabel.setForeground(gainLoss >= 0 ? SUCCESS : DANGER);
+        holdingsCountLabel.setText(String.valueOf(investments.size()));
+
+        Investment bestPerformer = getBestPerformer(investments);
+        Investment worstPerformer = getWorstPerformer(investments);
+        updatePerformerLabel(bestPerformerLabel, bestPerformer, SUCCESS);
+        updatePerformerLabel(worstPerformerLabel, worstPerformer, DANGER);
+
+        if (loadError != null && !loadError.trim().isEmpty()) {
+            showTableState("Could not load investments", "Check your database settings and refresh again.");
+            showTableStatus("Could not refresh investments: " + DbErrorFormatter.format(loadError), DANGER);
+        } else if (investments.isEmpty()) {
+            showTableState("No investments yet", "Add your first holding to start tracking your portfolio.");
+            tableStatusLabel.setForeground(LABEL_CLR);
+            tableStatusLabel.setText(" ");
+            bestPerformerLabel.setText("None");
+            bestPerformerLabel.setForeground(LABEL_CLR);
+            worstPerformerLabel.setText("None");
+            worstPerformerLabel.setForeground(LABEL_CLR);
+        } else {
+            showInvestmentTable();
+            tableStatusLabel.setForeground(LABEL_CLR);
+            tableStatusLabel.setText(investments.size() + (investments.size() == 1 ? " holding loaded." : " holdings loaded."));
+        }
+
+        if (refreshButton != null) {
+            refreshButton.setEnabled(true);
+        }
     }
 
     // ----------------------------------------------------------------
@@ -390,26 +487,31 @@ public class InvestmentPanel extends JPanel {
         String currText     = currentPriceField.getText().trim();
         String date         = dateField.getText().trim();
 
-        // Basic validation
-        if (name.isEmpty()) {
-            showFormStatus("Investment name is required.", DANGER); return;
-        }
-        if (!isPositiveDouble(sharesText)) {
-            showFormStatus("Shares must be a positive number.", DANGER); return;
-        }
-        if (!isPositiveDouble(buyText)) {
-            showFormStatus("Buy price must be a positive number.", DANGER); return;
+        String error = ValidationUtils.validateInvestmentInput(name, ticker, sharesText, buyText, currText, date);
+        if (error != null) {
+            showFormStatus(error, DANGER);
+            return;
         }
 
         double shares       = Double.parseDouble(sharesText);
         double buyPrice     = Double.parseDouble(buyText);
-        double currentPrice = currText.isEmpty() ? buyPrice : parseDoubleOrZero(currText);
+        double currentPrice = currText.isEmpty() ? buyPrice : Double.parseDouble(currText);
 
-        dao.addInvestment(DEFAULT_USER_ID, name, ticker, type,
-                          shares, buyPrice, currentPrice, date, "");
-        clearForm();
-        loadData();
-        showFormStatus("Investment added!", SUCCESS);
+        addButton.setEnabled(false);
+        try {
+            String dbError = dao.addInvestment(DEFAULT_USER_ID, name, ticker, type,
+                               shares, buyPrice, currentPrice, date, "");
+            if (dbError == null) {
+                clearForm();
+                loadData();
+                showFormStatus("Investment added.", SUCCESS);
+                showTableStatus("Portfolio refreshed after add.", SUCCESS);
+            } else {
+                showFormStatus("Could not save investment: " + DbErrorFormatter.format(dbError), DANGER);
+            }
+        } finally {
+            addButton.setEnabled(true);
+        }
     }
 
     private void clearForm() {
@@ -423,8 +525,7 @@ public class InvestmentPanel extends JPanel {
     }
 
     private void showFormStatus(String msg, Color color) {
-        formStatus.setForeground(color);
-        formStatus.setText(msg);
+        showTimedStatus(formStatus, msg, color);
     }
 
     // ----------------------------------------------------------------
@@ -446,15 +547,96 @@ public class InvestmentPanel extends JPanel {
         return UITheme.button(text, color);
     }
 
-    private boolean isPositiveDouble(String s) {
-        if (s == null || s.isEmpty()) return false;
-        try { return Double.parseDouble(s) > 0; }
-        catch (NumberFormatException e) { return false; }
+    private void wireFormStatusResetters() {
+        attachStatusClearer(nameField, formStatus);
+        attachStatusClearer(tickerField, formStatus);
+        attachStatusClearer(sharesField, formStatus);
+        attachStatusClearer(buyPriceField, formStatus);
+        attachStatusClearer(currentPriceField, formStatus);
+        attachStatusClearer(dateField, formStatus);
+        typeBox.addActionListener(e -> clearStatus(formStatus));
     }
 
-    private double parseDoubleOrZero(String s) {
-        try { return Double.parseDouble(s); }
-        catch (NumberFormatException e) { return 0; }
+    private void attachStatusClearer(JTextComponent field, JLabel label) {
+        field.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { clearStatus(label); }
+            @Override public void removeUpdate(DocumentEvent e) { clearStatus(label); }
+            @Override public void changedUpdate(DocumentEvent e) { clearStatus(label); }
+        });
+    }
+
+    private void clearStatus(JLabel label) {
+        Timer timer = (Timer) label.getClientProperty("statusTimer");
+        if (timer != null) {
+            timer.stop();
+        }
+        label.setText(" ");
+        label.setForeground(LABEL_CLR);
+    }
+
+    private void showTimedStatus(JLabel label, String message, Color color) {
+        clearStatus(label);
+        label.setForeground(color);
+        label.setText(message);
+
+        Timer timer = new Timer(5000, e -> {
+            label.setText(" ");
+            label.setForeground(LABEL_CLR);
+        });
+        timer.setRepeats(false);
+        label.putClientProperty("statusTimer", timer);
+        timer.start();
+    }
+
+    private void showTableStatus(String message, Color color) {
+        showTimedStatus(tableStatusLabel, message, color);
+    }
+
+    private void showTableState(String title, String body) {
+        tableStateTitleLabel.setText(title);
+        tableStateBodyLabel.setText(body);
+        tableContentLayout.show(tableContentPanel, "state");
+    }
+
+    private void showInvestmentTable() {
+        tableContentLayout.show(tableContentPanel, "table");
+    }
+
+    private Investment getBestPerformer(List<Investment> investments) {
+        Investment best = null;
+        for (Investment investment : investments) {
+            if (best == null || investment.getGainLossPct() > best.getGainLossPct()) {
+                best = investment;
+            }
+        }
+        return best;
+    }
+
+    private Investment getWorstPerformer(List<Investment> investments) {
+        Investment worst = null;
+        for (Investment investment : investments) {
+            if (worst == null || investment.getGainLossPct() < worst.getGainLossPct()) {
+                worst = investment;
+            }
+        }
+        return worst;
+    }
+
+    private void updatePerformerLabel(JLabel label, Investment investment, Color accent) {
+        if (investment == null) {
+            label.setText("None");
+            label.setForeground(LABEL_CLR);
+            label.setToolTipText(null);
+            return;
+        }
+        label.setText(investment.getTicker().isEmpty() ? investment.getName() : investment.getTicker());
+        label.setForeground(accent);
+        label.setToolTipText(String.format(
+            "%s | %.2f%% | $%.2f gain/loss",
+            investment.getName(),
+            investment.getGainLossPct(),
+            investment.getGainLoss()
+        ));
     }
 
     // ----------------------------------------------------------------
@@ -477,7 +659,7 @@ public class InvestmentPanel extends JPanel {
         public Component getTableCellRendererComponent(JTable tbl, Object value,
                 boolean selected, boolean focused, int row, int col) {
             super.getTableCellRendererComponent(tbl, value, selected, focused, row, col);
-            setBackground(selected ? new Color(219, 234, 254) : CARD_BG);
+            setBackground(selected ? new Color(219, 234, 254) : (row % 2 == 0 ? CARD_BG : UITheme.ROW_ALT));
             setForeground(TEXT_CLR);
 
             // Color gain/loss columns
@@ -529,15 +711,26 @@ public class InvestmentPanel extends JPanel {
             button.addActionListener(e -> {
                 fireEditingStopped();
                 if (clickedRow >= 0 && clickedRow < currentInvestments.size()) {
-                    int id = currentInvestments.get(clickedRow).getId();
+                    Investment investment = currentInvestments.get(clickedRow);
+                    int id = investment.getId();
                     int confirm = JOptionPane.showConfirmDialog(
                         InvestmentPanel.this,
-                        "Delete this investment?",
+                        "<html>Delete this investment?<br><br>" +
+                            "<b>" + investment.getName() + "</b><br>" +
+                            investment.getTicker() + " • " + investment.getType() + " • " +
+                            String.format("%.4f shares", investment.getShares()) +
+                        "</html>",
                         "Confirm Delete",
-                        JOptionPane.YES_NO_OPTION);
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
                     if (confirm == JOptionPane.YES_OPTION) {
-                        dao.deleteInvestment(id);
-                        loadData();
+                        String error = dao.deleteInvestment(id);
+                        if (error == null) {
+                            loadData();
+                            showTableStatus("Investment deleted.", SUCCESS);
+                        } else {
+                            showTableStatus("Could not delete investment: " + DbErrorFormatter.format(error), DANGER);
+                        }
                     }
                 }
             });

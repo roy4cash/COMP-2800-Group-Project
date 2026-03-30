@@ -15,6 +15,8 @@ import java.util.List;
  */
 public class CategoryDAO {
 
+    private String lastLoadErrorMessage;
+
     /** Hardcoded default categories — id matches what the DB should have. */
     private static final Object[][] DEFAULT_CATEGORIES = {
         {1, "Food"},
@@ -22,10 +24,7 @@ public class CategoryDAO {
         {3, "Entertainment"},
         {4, "Utilities"},
         {5, "Health"},
-        {6, "Education"},
-        {7, "Shopping"},
-        {8, "Investment"},
-        {9, "Other"}
+        {6, "Other"}
     };
 
     /**
@@ -67,6 +66,7 @@ public class CategoryDAO {
     /** Executes the SELECT and returns whatever is in the table. */
     private List<Category> fetchCategories() {
         List<Category> categories = new ArrayList<>();
+        lastLoadErrorMessage = null;
         String sql = "SELECT id, name FROM categories ORDER BY name";
 
         try (Connection conn = DBConnection.getConnection();
@@ -79,6 +79,7 @@ public class CategoryDAO {
 
         } catch (SQLException e) {
             System.err.println("CategoryDAO.fetchCategories: " + e.getMessage());
+            lastLoadErrorMessage = e.getMessage();
         }
 
         return categories;
@@ -86,11 +87,11 @@ public class CategoryDAO {
 
     /**
      * Inserts the hardcoded default categories into the DB.
-     * Uses INSERT ON CONFLICT DO NOTHING so calling this multiple times
-     * is safe — no duplicate rows will be created.
+     * Uses INSERT IGNORE so calling this multiple times
+     * is safe and will not create duplicate rows.
      */
     private void insertDefaultCategories() {
-        String sql = "INSERT INTO categories (id, name) VALUES (?, ?) ON CONFLICT DO NOTHING";
+        String sql = "INSERT IGNORE INTO categories (id, name) VALUES (?, ?)";
 
         try (Connection       conn = DBConnection.getConnection();
              PreparedStatement ps   = conn.prepareStatement(sql)) {
@@ -106,5 +107,10 @@ public class CategoryDAO {
         } catch (SQLException e) {
             System.err.println("CategoryDAO.insertDefaultCategories: " + e.getMessage());
         }
+    }
+
+    /** Last error encountered while loading categories, or null if the last load succeeded. */
+    public String getLastLoadErrorMessage() {
+        return lastLoadErrorMessage;
     }
 }

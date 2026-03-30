@@ -46,24 +46,26 @@ public class ExpenseManager implements Subject {
      * Without this, every INSERT into expenses fails with a foreign-key violation.
      */
     private void ensureDefaultUserExists() {
-        // First try: insert user with explicit id=1
-        String sql = "INSERT INTO users (id, username) VALUES (1, 'default_user') " +
-                     "ON CONFLICT DO NOTHING";
+        String checkSql = "SELECT id FROM users WHERE id = 1";
+        String insertSql = "INSERT INTO users (id, username) VALUES (1, 'default_user')";
+
         try (java.sql.Connection conn = db.DBConnection.getConnection();
-             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.executeUpdate();
-            System.out.println("ensureDefaultUserExists: OK");
-        } catch (java.sql.SQLException e) {
-            System.err.println("ensureDefaultUserExists FAILED: " + e.getMessage());
-            // Fallback: insert without explicit id (let SERIAL assign it)
-            String sql2 = "INSERT INTO users (username) VALUES ('default_user') ON CONFLICT (username) DO NOTHING";
-            try (java.sql.Connection conn2 = db.DBConnection.getConnection();
-                 java.sql.PreparedStatement ps2 = conn2.prepareStatement(sql2)) {
-                ps2.executeUpdate();
-                System.out.println("ensureDefaultUserExists fallback: OK");
-            } catch (java.sql.SQLException e2) {
-                System.err.println("ensureDefaultUserExists fallback FAILED: " + e2.getMessage());
+             java.sql.PreparedStatement check = conn.prepareStatement(checkSql)) {
+
+            java.sql.ResultSet rs = check.executeQuery();
+            if (rs.next()) {
+                return;
             }
+
+            try (java.sql.PreparedStatement insert = conn.prepareStatement(insertSql)) {
+                insert.executeUpdate();
+                System.out.println("ensureDefaultUserExists: inserted default user.");
+            }
+        } catch (java.sql.SQLException e) {
+            System.err.println(
+                "ensureDefaultUserExists failed: " + e.getMessage() +
+                ". Make sure sql/fat_schema.sql has been run on the MySQL database."
+            );
         }
     }
 
@@ -94,19 +96,45 @@ public class ExpenseManager implements Subject {
      */
     public String addExpense(int categoryId, String description, double amount, LocalDate date) {
         String error = expenseDAO.addExpense(DEFAULT_USER_ID, categoryId, description, amount, date);
-        notifyObservers();
+        if (error == null) {
+            notifyObservers();
+        }
         return error;
     }
 
-    /** Deletes the expense with the given ID and notifies all registered observers. */
-    public void deleteExpense(int expenseId) {
-        expenseDAO.deleteExpense(expenseId);
-        notifyObservers();
+    /** Deletes the expense with the given ID and notifies all registered observers on success. */
+    public String deleteExpense(int expenseId) {
+        String error = expenseDAO.deleteExpense(expenseId);
+        if (error == null) {
+            notifyObservers();
+        }
+        return error;
     }
 
     /** Returns every expense for the default user, newest first. */
     public List<Expense> getAllExpenses() {
         return expenseDAO.getAllExpenses(DEFAULT_USER_ID);
+    }
+
+    /** Returns only the expenses that belong to the current calendar month. */
+    public List<Expense> getCurrentMonthExpenses() {
+        LocalDate now = LocalDate.now();
+        List<Expense> allExpenses = getAllExpenses();
+        List<Expense> currentMonth = new ArrayList<>();
+        for (Expense expense : allExpenses) {
+            LocalDate date = expense.getDate();
+            if (date.getMonthValue() == now.getMonthValue() && date.getYear() == now.getYear()) {
+                currentMonth.add(expense);
+            }
+        }
+        return currentMonth;
+    }
+
+    /** Returns the most recent expenses, capped to the requested limit. */
+    public List<Expense> getRecentExpenses(int limit) {
+        List<Expense> allExpenses = getAllExpenses();
+        int end = Math.min(Math.max(limit, 0), allExpenses.size());
+        return new ArrayList<>(allExpenses.subList(0, end));
     }
 
     // ----------------------------------------------------------------
@@ -119,11 +147,14 @@ public class ExpenseManager implements Subject {
         return budgetDAO.getBudget(DEFAULT_USER_ID, now.getMonthValue(), now.getYear());
     }
 
-    /** Saves or updates the monthly budget and notifies observers. */
-    public void setBudget(double amount) {
+    /** Saves or updates the monthly budget and notifies observers on success. */
+    public String setBudget(double amount) {
         LocalDate now = LocalDate.now();
-        budgetDAO.saveBudget(DEFAULT_USER_ID, now.getMonthValue(), now.getYear(), amount);
-        notifyObservers();
+        String error = budgetDAO.saveBudget(DEFAULT_USER_ID, now.getMonthValue(), now.getYear(), amount);
+        if (error == null) {
+            notifyObservers();
+        }
+        return error;
     }
 
     /** Returns the total amount spent in the current calendar month. */
@@ -150,7 +181,8 @@ public class ExpenseManager implements Subject {
      * Used by InsightsPanel to populate the "Transactions" stat card.
      */
     public int getExpenseCount() {
-        return getAllExpenses().size();
+        LocalDate now = LocalDate.now();
+        return expenseDAO.getExpenseCountForMonth(DEFAULT_USER_ID, now.getMonthValue(), now.getYear());
     }
 
     /**
@@ -194,5 +226,25 @@ public class ExpenseManager implements Subject {
      */
     public List<Category> getAllCategories() {
         return categoryDAO.getAllCategories();
+    }
+
+    /** Last error encountered while loading the transaction list, or null if the last load succeeded. */
+    public String getLastExpenseLoadError() {
+        return expenseDAO.getLastLoadErrorMessage();
+    }
+
+    /** Last error encountered while loading totals, counts, or category breakdowns. */
+    public String getLastAggregateLoadError() {
+        return expenseDAO.getLastAggregateErrorMessage();
+    }
+
+    /** Last error encountered while loading categories, or null if the last load succeeded. */
+    public String getLastCategoryLoadError() {
+        return categoryDAO.getLastLoadErrorMessage();
+    }
+
+    /** Last error encountered while loading the current budget, or null if the last load succeeded. */
+    public String getLastBudgetLoadError() {
+        return budgetDAO.getLastLoadErrorMessage();
     }
 }

@@ -26,15 +26,60 @@ public class DashboardPanel extends JPanel {
         AlertPanel   alertPanel   = new AlertPanel(manager);
         SummaryPanel summaryPanel = new SummaryPanel(manager);
         ChartPanel   chartPanel   = new ChartPanel(manager);
+        TopCategoriesPanel topCategoriesPanel = new TopCategoriesPanel(manager);
+        RecentTransactionsPanel recentTransactionsPanel = new RecentTransactionsPanel(manager);
 
-        // North section: alert + stat cards stacked
-        JPanel northSection = new JPanel();
-        northSection.setOpaque(false);
-        northSection.setLayout(new BoxLayout(northSection, BoxLayout.Y_AXIS));
-        northSection.add(alertPanel);
-        northSection.add(summaryPanel);
+        JPanel content = new JPanel();
+        content.setOpaque(false);
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.add(buildHeader());
+        content.add(Box.createVerticalStrut(16));
+        content.add(alertPanel);
+        content.add(summaryPanel);
+        content.add(Box.createVerticalStrut(16));
 
-        add(northSection, BorderLayout.NORTH);
-        add(chartPanel,   BorderLayout.CENTER);
+        JPanel analyticsRow = new JPanel(new GridBagLayout());
+        analyticsRow.setOpaque(false);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridy = 0;
+        gbc.insets = new Insets(0, 0, 0, 0);
+        gbc.fill = GridBagConstraints.BOTH;
+
+        gbc.gridx = 0;
+        gbc.weightx = 0.62;
+        chartPanel.setPreferredSize(new Dimension(0, 420));
+        analyticsRow.add(chartPanel, gbc);
+
+        JPanel sideColumn = new JPanel();
+        sideColumn.setOpaque(false);
+        sideColumn.setLayout(new GridLayout(2, 1, 0, 16));
+        sideColumn.add(topCategoriesPanel);
+        sideColumn.add(recentTransactionsPanel);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.38;
+        gbc.insets = new Insets(0, 16, 0, 0);
+        analyticsRow.add(sideColumn, gbc);
+
+        content.add(analyticsRow);
+
+        add(content, BorderLayout.CENTER);
+    }
+
+    private JPanel buildHeader() {
+        JPanel header = new JPanel();
+        header.setOpaque(false);
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+
+        JLabel title = util.UITheme.pageTitle("Dashboard");
+        JLabel subtitle = util.UITheme.pageSubtitle(
+            "Live budget status, category trends, and recent activity in one place."
+        );
+
+        header.add(title);
+        header.add(Box.createVerticalStrut(4));
+        header.add(subtitle);
+        return header;
     }
 }

@@ -3,13 +3,19 @@ package ui;
 import model.Expense;
 import observer.ExpenseManager;
 import observer.Observer;
+import util.DbErrorFormatter;
 import util.UITheme;
 
 import javax.swing.*;
 import javax.swing.border.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.*;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Displays all expenses in a styled, scrollable table.
@@ -18,6 +24,7 @@ import java.util.List;
  */
 public class ExpenseTablePanel extends JPanel implements Observer {
 
+    private static final Color SUCCESS    = new Color(16, 185, 129);
     private static final Color DANGER     = new Color(239, 68,  68);
     private static final Color BG         = new Color(248, 250, 252);
     private static final Color CARD_BG    = Color.WHITE;
@@ -33,7 +40,19 @@ public class ExpenseTablePanel extends JPanel implements Observer {
     private final ExpenseManager    manager;
     private final DefaultTableModel tableModel;
     private final JTable            table;
+    private final TableRowSorter<DefaultTableModel> rowSorter;
     private       JLabel            countLabel;
+    private       JLabel            statusLabel;
+    private       JButton           deleteButton;
+    private       JTextField        searchField;
+    private       JComboBox<String> categoryFilterBox;
+    private       JButton           clearFiltersButton;
+    private final CardLayout        contentLayout = new CardLayout();
+    private final JPanel            contentPanel  = new JPanel(contentLayout);
+    private       JLabel            stateTitleLabel;
+    private       JLabel            stateBodyLabel;
+    private       List<Expense>     currentExpenses = new ArrayList<>();
+    private       boolean           syncingFilterOptions;
 
     public ExpenseTablePanel(ExpenseManager manager) {
         this.manager = manager;
@@ -45,6 +64,9 @@ public class ExpenseTablePanel extends JPanel implements Observer {
 
         tableModel = buildTableModel();
         table      = buildTable();
+        rowSorter  = buildRowSorter();
+        table.setRowSorter(rowSorter);
+        table.getSelectionModel().addListSelectionListener(e -> updateDeleteButtonState());
 
         add(buildTopBar(),    BorderLayout.NORTH);
         add(buildTableCard(), BorderLayout.CENTER);
@@ -61,6 +83,12 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         String[] columns = {"ID", "Date", "Category", "Description", "Amount ($)"};
         return new DefaultTableModel(columns, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == ID_COLUMN) return Integer.class;
+                if (columnIndex == 4) return Double.class;
+                return String.class;
+            }
         };
     }
 
@@ -109,7 +137,16 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         // Right-align amount column
         DefaultTableCellRenderer rightAlign = new DefaultTableCellRenderer();
         rightAlign.setHorizontalAlignment(SwingConstants.RIGHT);
-        t.getColumnModel().getColumn(4).setCellRenderer(rightAlign);
+        t.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                           boolean hasFocus, int row, int column) {
+                Object display = value instanceof Number
+                    ? String.format("$%.2f", ((Number) value).doubleValue())
+                    : value;
+                return rightAlign.getTableCellRendererComponent(table, display, isSelected, hasFocus, row, column);
+            }
+        });
 
         // Centre-align date column
         DefaultTableCellRenderer centreAlign = new DefaultTableCellRenderer();
@@ -119,10 +156,20 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         return t;
     }
 
+    private TableRowSorter<DefaultTableModel> buildRowSorter() {
+        TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(tableModel);
+        sorter.setComparator(4, Comparator.comparingDouble(value -> ((Number) value).doubleValue()));
+        return sorter;
+    }
+
     private JPanel buildTopBar() {
-        JPanel bar = new JPanel(new BorderLayout());
-        bar.setOpaque(false);
-        bar.setBorder(new EmptyBorder(0, 0, 12, 0));
+        JPanel wrapper = new JPanel();
+        wrapper.setOpaque(false);
+        wrapper.setLayout(new BoxLayout(wrapper, BoxLayout.Y_AXIS));
+        wrapper.setBorder(new EmptyBorder(0, 0, 12, 0));
+
+        JPanel titleRow = new JPanel(new BorderLayout());
+        titleRow.setOpaque(false);
 
         JLabel title = new JLabel("Transaction History");
         title.setFont(new Font("Segoe UI", Font.BOLD, 16));
@@ -132,30 +179,114 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         countLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         countLabel.setForeground(MUTED);
 
-        bar.add(title,      BorderLayout.WEST);
-        bar.add(countLabel, BorderLayout.EAST);
-        return bar;
+        titleRow.add(title, BorderLayout.WEST);
+        titleRow.add(countLabel, BorderLayout.EAST);
+
+        JPanel filterRow = new JPanel(new GridBagLayout());
+        filterRow.setOpaque(false);
+        filterRow.setBorder(new EmptyBorder(10, 0, 0, 0));
+
+        searchField = UITheme.field();
+        searchField.setToolTipText("Search by description, category, or date");
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { applyFilters(); }
+            @Override public void removeUpdate(DocumentEvent e) { applyFilters(); }
+            @Override public void changedUpdate(DocumentEvent e) { applyFilters(); }
+        });
+
+        categoryFilterBox = new JComboBox<>(new String[] {"All Categories"});
+        UITheme.styleComboBox(categoryFilterBox);
+        categoryFilterBox.addActionListener(e -> {
+            if (!syncingFilterOptions) {
+                applyFilters();
+            }
+        });
+
+        clearFiltersButton = UITheme.button("Clear Filters", UITheme.SLATE);
+        clearFiltersButton.setPreferredSize(new Dimension(140, 38));
+        clearFiltersButton.addActionListener(e -> {
+            searchField.setText("");
+            categoryFilterBox.setSelectedIndex(0);
+            applyFilters();
+        });
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridy = 0;
+        gbc.insets = new Insets(0, 0, 0, 10);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        gbc.gridx = 0;
+        filterRow.add(labeledControl("Search", searchField), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.35;
+        filterRow.add(labeledControl("Category", categoryFilterBox), gbc);
+
+        gbc.gridx = 2;
+        gbc.weightx = 0;
+        gbc.insets = new Insets(18, 0, 0, 0);
+        filterRow.add(clearFiltersButton, gbc);
+
+        wrapper.add(titleRow);
+        wrapper.add(filterRow);
+        return wrapper;
     }
 
-    private JScrollPane buildTableCard() {
+    private JPanel buildTableCard() {
         JScrollPane scroll = new JScrollPane(table);
         scroll.setBorder(new LineBorder(BORDER_CLR, 1, true));
         scroll.getViewport().setBackground(CARD_BG);
-        return scroll;
+
+        JPanel statePanel = buildStatePanel();
+
+        contentPanel.setOpaque(false);
+        contentPanel.add(scroll, "table");
+        contentPanel.add(statePanel, "state");
+        return contentPanel;
     }
 
     private JPanel buildBottomBar() {
-        JPanel bar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        JPanel bar = new JPanel(new BorderLayout());
         bar.setOpaque(false);
         bar.setBorder(new EmptyBorder(12, 0, 0, 0));
 
-        // Use UITheme.button() so Delete gets the same hover effect as all other buttons
-        JButton deleteBtn = UITheme.button("Delete Selected", UITheme.DANGER);
-        deleteBtn.setPreferredSize(new Dimension(160, 36));
-        deleteBtn.addActionListener(e -> deleteSelectedExpense());
+        statusLabel = new JLabel(" ");
+        statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        statusLabel.setForeground(MUTED);
 
-        bar.add(deleteBtn);
+        deleteButton = UITheme.button("Delete Selected", UITheme.DANGER);
+        deleteButton.setPreferredSize(new Dimension(160, 36));
+        deleteButton.setEnabled(false);
+        deleteButton.addActionListener(e -> deleteSelectedExpense());
+
+        bar.add(statusLabel, BorderLayout.WEST);
+        bar.add(deleteButton, BorderLayout.EAST);
         return bar;
+    }
+
+    private JPanel buildStatePanel() {
+        JPanel statePanel = new JPanel(new GridBagLayout());
+        statePanel.setBackground(CARD_BG);
+        statePanel.setBorder(new LineBorder(BORDER_CLR, 1, true));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.weightx = 1.0;
+        gbc.insets = new Insets(4, 24, 4, 24);
+
+        stateTitleLabel = new JLabel("No transactions yet");
+        stateTitleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        stateTitleLabel.setForeground(TEXT_CLR);
+        gbc.gridy = 0;
+        statePanel.add(stateTitleLabel, gbc);
+
+        stateBodyLabel = new JLabel("Add your first expense to start tracking spending.");
+        stateBodyLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        stateBodyLabel.setForeground(MUTED);
+        gbc.gridy = 1;
+        statePanel.add(stateBodyLabel, gbc);
+
+        return statePanel;
     }
 
     // ----------------------------------------------------------------
@@ -165,20 +296,167 @@ public class ExpenseTablePanel extends JPanel implements Observer {
     private void deleteSelectedExpense() {
         int selectedRow = table.getSelectedRow();
         if (selectedRow == -1) {
-            JOptionPane.showMessageDialog(this,
-                "Please select an expense to delete.", "No Selection",
-                JOptionPane.INFORMATION_MESSAGE);
+            showStatus("Select a transaction first.", DANGER);
             return;
         }
 
+        int modelRow = table.convertRowIndexToModel(selectedRow);
+
+        String date = String.valueOf(tableModel.getValueAt(modelRow, 1));
+        String category = String.valueOf(tableModel.getValueAt(modelRow, 2));
+        String description = String.valueOf(tableModel.getValueAt(modelRow, 3));
+        String amount = String.format("$%.2f", ((Number) tableModel.getValueAt(modelRow, 4)).doubleValue());
+
         int confirm = JOptionPane.showConfirmDialog(
-            this, "Delete this expense?", "Confirm Delete", JOptionPane.YES_NO_OPTION
+            this,
+            "<html>Delete this transaction?<br><br>" +
+                "<b>" + description + "</b><br>" +
+                date + " • " + category + " • " + amount +
+            "</html>",
+            "Confirm Delete",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE
         );
 
         if (confirm == JOptionPane.YES_OPTION) {
-            int expenseId = (int) tableModel.getValueAt(selectedRow, ID_COLUMN);
-            manager.deleteExpense(expenseId);
+            int expenseId = (int) tableModel.getValueAt(modelRow, ID_COLUMN);
+            String error = manager.deleteExpense(expenseId);
+            if (error == null) {
+                table.clearSelection();
+                showStatus("Transaction deleted.", SUCCESS);
+            } else {
+                showStatus("Could not delete transaction: " + DbErrorFormatter.format(error), DANGER);
+            }
         }
+    }
+
+    private void updateDeleteButtonState() {
+        if (deleteButton != null) {
+            deleteButton.setEnabled(table.getSelectedRow() != -1 && tableModel.getRowCount() > 0);
+        }
+    }
+
+    private void showState(String title, String body) {
+        stateTitleLabel.setText(title);
+        stateBodyLabel.setText(body);
+        contentLayout.show(contentPanel, "state");
+    }
+
+    private void showTable() {
+        contentLayout.show(contentPanel, "table");
+    }
+
+    private JPanel labeledControl(String labelText, JComponent field) {
+        JPanel panel = new JPanel();
+        panel.setOpaque(false);
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+
+        JLabel label = new JLabel(labelText);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        label.setForeground(MUTED);
+
+        panel.add(label);
+        panel.add(Box.createVerticalStrut(4));
+        panel.add(field);
+        return panel;
+    }
+
+    private void populateCategoryFilterOptions(List<Expense> expenses) {
+        String selected = categoryFilterBox == null || categoryFilterBox.getSelectedItem() == null
+            ? "All Categories"
+            : categoryFilterBox.getSelectedItem().toString();
+
+        syncingFilterOptions = true;
+        categoryFilterBox.removeAllItems();
+        categoryFilterBox.addItem("All Categories");
+        expenses.stream()
+            .map(Expense::getCategoryName)
+            .distinct()
+            .sorted()
+            .forEach(categoryFilterBox::addItem);
+
+        boolean restored = false;
+        for (int i = 0; i < categoryFilterBox.getItemCount(); i++) {
+            if (selected.equals(categoryFilterBox.getItemAt(i))) {
+                categoryFilterBox.setSelectedIndex(i);
+                restored = true;
+                break;
+            }
+        }
+        if (!restored) {
+            categoryFilterBox.setSelectedIndex(0);
+        }
+        syncingFilterOptions = false;
+    }
+
+    private void applyFilters() {
+        if (rowSorter == null || searchField == null || categoryFilterBox == null) {
+            return;
+        }
+
+        String search = searchField.getText().trim().toLowerCase(Locale.ENGLISH);
+        String category = String.valueOf(categoryFilterBox.getSelectedItem());
+
+        RowFilter<DefaultTableModel, Integer> filter = new RowFilter<DefaultTableModel, Integer>() {
+            @Override
+            public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> entry) {
+                String rowCategory = String.valueOf(entry.getValue(2));
+                String date = String.valueOf(entry.getValue(1));
+                String description = String.valueOf(entry.getValue(3));
+                String amount = String.format("$%.2f", ((Number) entry.getValue(4)).doubleValue());
+
+                boolean matchesCategory = category == null
+                    || "All Categories".equals(category)
+                    || rowCategory.equals(category);
+
+                boolean matchesSearch = search.isEmpty()
+                    || rowCategory.toLowerCase(Locale.ENGLISH).contains(search)
+                    || description.toLowerCase(Locale.ENGLISH).contains(search)
+                    || date.toLowerCase(Locale.ENGLISH).contains(search)
+                    || amount.toLowerCase(Locale.ENGLISH).contains(search);
+
+                return matchesCategory && matchesSearch;
+            }
+        };
+
+        rowSorter.setRowFilter(filter);
+        refreshVisibleState();
+    }
+
+    private void refreshVisibleState() {
+        int totalCount = currentExpenses.size();
+        int visibleCount = rowSorter.getViewRowCount();
+
+        if (totalCount == 0) {
+            countLabel.setText("0 transactions");
+            showState("No transactions yet", "Add your first expense to start tracking spending.");
+        } else if (visibleCount == 0) {
+            countLabel.setText("Showing 0 of " + totalCount + " transactions");
+            showState("No matching transactions", "Try clearing filters or searching for a different keyword.");
+        } else {
+            countLabel.setText("Showing " + visibleCount + " of " + totalCount + " transactions");
+            showTable();
+        }
+
+        updateDeleteButtonState();
+    }
+
+    private void showStatus(String message, Color color) {
+        Timer timer = (Timer) statusLabel.getClientProperty("statusTimer");
+        if (timer != null) {
+            timer.stop();
+        }
+
+        statusLabel.setForeground(color);
+        statusLabel.setText(message);
+
+        Timer clearTimer = new Timer(5000, e -> {
+            statusLabel.setText(" ");
+            statusLabel.setForeground(MUTED);
+        });
+        clearTimer.setRepeats(false);
+        statusLabel.putClientProperty("statusTimer", clearTimer);
+        clearTimer.start();
     }
 
     // ----------------------------------------------------------------
@@ -190,17 +468,27 @@ public class ExpenseTablePanel extends JPanel implements Observer {
         tableModel.setRowCount(0);
 
         List<Expense> expenses = manager.getAllExpenses();
+        currentExpenses = new ArrayList<>(expenses);
+        String loadError = manager.getLastExpenseLoadError();
         for (Expense e : expenses) {
             tableModel.addRow(new Object[]{
                 e.getId(),
                 e.getDate().toString(),
                 e.getCategoryName(),
                 e.getDescription(),
-                String.format("$%.2f", e.getAmount())
+                e.getAmount()
             });
         }
 
-        int count = expenses.size();
-        countLabel.setText(count + (count == 1 ? " transaction" : " transactions"));
+        table.clearSelection();
+        populateCategoryFilterOptions(expenses);
+        updateDeleteButtonState();
+
+        if (loadError != null && !loadError.trim().isEmpty()) {
+            countLabel.setText("Unavailable");
+            showState("Could not load transactions", DbErrorFormatter.format(loadError));
+        } else {
+            applyFilters();
+        }
     }
 }
